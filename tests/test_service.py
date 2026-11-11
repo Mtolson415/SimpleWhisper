@@ -3,7 +3,8 @@ import unittest
 import wave
 from unittest.mock import patch
 
-from service import transcribe, validate_audio
+import service
+from service import transcribe, validate_audio, select_model, model_catalog
 
 
 def sample(rate=16000, channels=1, duration=1):
@@ -17,6 +18,24 @@ def sample(rate=16000, channels=1, duration=1):
 
 
 class AudioTests(unittest.TestCase):
+    def test_catalog_does_not_expose_paths(self):
+        catalog = model_catalog()
+        self.assertEqual(len(catalog['models']), 3)
+        self.assertTrue(all(set(model) == {'id', 'label'} for model in catalog['models']))
+
+    def test_unknown_model_never_reaches_runtime(self):
+        with patch('service.urllib.request.urlopen') as upstream:
+            with self.assertRaises(ValueError):
+                select_model('../../outside.bin')
+            upstream.assert_not_called()
+
+    def test_failed_model_load_does_not_change_active_model(self):
+        original = service.ACTIVE_MODEL
+        with patch('service.urllib.request.urlopen', side_effect=OSError('offline')):
+            with self.assertRaises(OSError):
+                select_model('turbo')
+        self.assertEqual(service.ACTIVE_MODEL, original)
+
     def test_valid_pcm(self):
         validate_audio(sample())
 

@@ -2,20 +2,28 @@
 
 ## Why these choices
 
-Reusing the installed Whisper model avoids a second model download and competing inference services. Lemonade exposes a documented audio transcription API. A small standard-library gateway validates WAV recordings without FFmpeg or third-party server dependencies. `sounddevice` uses PortAudio to capture microphone samples; Win32 `RegisterHotKey` registers one shortcut without a keyboard logging hook. Tk provides a visible status, microphone selector and transcript recovery box.
+The existing Whisper file is mounted read-only into a pinned whisper.cpp CPU container, avoiding another model download. The gateway forwards WAV recordings to that container's `/inference` endpoint; Lemonade is not required. `sounddevice`/PortAudio captures microphone samples, Win32 RegisterHotKey registers one shortcut, and Tk supplies the companion UI. PyInstaller bundles the Windows runtime into a portable folder.
 
-Alternatives: a browser recorder is useful for chat but does not supply a global desktop shortcut; Windows voice typing is a separate recognizer; an all-in-container Linux desktop would not be the host Windows desktop. Containerizing Whisper separately is a future portability option, with separate hardware/backend testing required. Docker Desktop device forwarding does not replace the interactive Windows helper.
+Alternatives: a browser recorder does not supply a global desktop shortcut; Windows voice typing uses another recognizer; a Linux desktop in a container is not the host Windows desktop. CPU inference is the portable baseline. GPU/NPU acceleration and equivalent performance to the old Windows runtime require separate verification.
 
 ## Manual setup and daily operation
 
 ```powershell
+Copy-Item .env.example .env
+# Set WHISPER_MODEL_DIR to your directory of speech model files.
 py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 docker compose up -d --build
 .\.venv\Scripts\pythonw.exe dictation.py
 ```
 
-Expected result: the helper opens with a microphone selector; the Docker gateway becomes healthy. Keep Lemonade running separately. Click an ordinary editable field, press Ctrl+Alt+D, speak, press again, then wait without changing windows. A transcript appears in the helper and a paste is requested in the active application. No form is submitted. Manual copy/paste is available if focus changed or paste is blocked.
+Expected: both gateway and Whisper become healthy. Click a text field, press Ctrl+Alt+D, speak, press again, and keep the same window active. No form is submitted. Copy/paste manually if focus changed. Build-Portable.ps1 produces the portable companion and ZIP; Install-Shortcuts.ps1 installs desktop Start/Stop shortcuts and a user Startup watcher. The portable bundle requires Docker Desktop and the model file, but no separate Python installation. Keep the entire extracted folder together.
+
+## Companion lifecycle and portable migration
+
+The Windows watcher detects both dictation services using Docker project/service labels. Starting them from the desktop shortcut or Docker Desktop opens the companion. Stopping/removing either service closes it without deleting source, executables or weights. Copy transcripts before stopping. Closing the companion manually keeps it closed until a stack start transition. The watcher reconnects after Docker restarts; Docker CLI failure is treated as a stopped stack. It polls every two seconds in your signed-in session. Duplicate instances are prevented with per-session named mutexes. No Docker socket is mounted into containers.
+
+Move the portable bundle and model file to the new machine, install Docker Desktop, update `.env`, rerun Install-Shortcuts.ps1, then start. For offline migration, export/load the pinned images first. Shortcuts contain local paths and must be recreated after moving the folder. The user Startup shortcut opens the watcher at sign-in. To disable it, remove only that shortcut and exit the watcher. The executable is unsigned; binary signing and second-host acceptance remain pending.
 
 The **Dictate directly into active input** checkbox starts checked to preserve the original behavior. Uncheck it for review-only dictation: transcripts still appear in the helper, but no clipboard change or automatic paste happens. The option is checked again before a delayed paste, so turning it off also cancels a paste waiting for shortcut keys to be released. This setting resets to checked when the helper restarts. The foreground-window guard remains active when the option is checked.
 
@@ -25,7 +33,8 @@ The **Dictate directly into active input** checkbox starts checked to preserve t
 |---|---|
 | Shortcut is in use | Close another helper or application owning Ctrl+Alt+D; restart this helper. |
 | No microphone / capture error | Select another input in the helper; verify it in Windows Sound settings yourself. No privacy settings are changed by this tool. |
-| Transcription failed | Check Lemonade is running and the model is installed; check Docker gateway health. First model load can take longer than a warm request. |
+| Transcription failed | Check both Docker services and WHISPER_MODEL_DIR. First model load can take longer than a warm request. |
+| Companion missing or closes | Confirm the watcher is running and both containers are running. Check Docker CLI availability. |
 | Text appears only in helper | A window switch intentionally suppresses paste; copy manually. Elevated apps may block input from a normal user process. |
 | Wrong words or text during silence | Check mic selection, mute switch and ambient noise. Test a clear short phrase. Model accuracy is separate from transport success. |
 | Gateway healthy but recognition fails | `/health` only verifies the gateway. A real WAV request is needed to verify Whisper. |
@@ -49,13 +58,15 @@ docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --mo
 
 Tests generate silent PCM samples in memory; no personal files or network/model services are required. CI repeats these tests and checks Python syntax. CI cannot prove Windows microphone access, recognition accuracy or insertion into a real application.
 
-On Windows, `python -m unittest discover -s tests -v` additionally runs five tests using fake desktop calls for the checkbox, paste guards and encoding. Linux skips those desktop tests. The helper window was opened and visually checked on the development machine; it showed microphone selection, ready status and transcript recovery controls.
+Additional mocked tests check container-stop events, Docker failures and requiring both model/gateway containers. Actual gateway stop closed the portable companion and a later start reopened it; tests do not establish reboot, second-host or real-application behavior.
+
+The suite has 23 tests: eight gateway/model-selection tests, four phrase-segmentation tests and eleven Windows helper tests. Linux skips Windows tests. Actual portable process checks also confirmed companion closure/reopening on gateway stop/restart, removal/recreation and model stop/restart. Paced synthetic live audio returned a phrase before recording ended. These do not prove actual microphone capture or Word/email input.
 
 Manual acceptance: dictate “This is my local dictation test” into a scratch document; confirm start/stop status and actual words. Repeat with a window switch during recognition and confirm no automatic paste. Try the intended Word/email programs, then repeat with the network disconnected while local services remain running. Record results before claiming these checks passed. Do not use confidential material for a demonstration.
 
 ## Stop, recover, remove
 
-Close the helper window to stop capture. `docker compose stop` stops only this project's gateway. `docker compose up -d --build` recreates the stateless gateway. If dependencies break, recreate only this repository's `.venv` and rerun setup. No persistent Docker volumes, model mounts, privileged containers or Docker socket access are used. The existing assistant and its volumes are not changed. Model/runtime recovery belongs to the Lemonade installation.
+Close the companion to stop capture. Stop-Dictation.ps1 or `docker compose stop` stops both services. `docker compose up -d --build` recreates the stateless services. Model weights are mounted read-only and remain unchanged. No named volumes, privileged mode or Docker socket access are used. Rebuild with Build-Portable.ps1 after source changes, closing existing companion/watcher processes before replacing executable files. Preserve the model, local `.env` and a known-good source/image set for recovery. No full second-host restore is claimed.
 
 ## Component and source record
 
@@ -67,8 +78,23 @@ Close the helper window to stop capture. `docker compose stop` stops only this p
 | PortAudio bundled by Windows sounddevice wheel | Upstream PortAudio license; transitive native dependency | https://www.portaudio.com/license.html |
 | CFFI | 2.1.1; MIT-0 | https://cffi.readthedocs.io/ |
 | pycparser | 3.12; BSD-3-Clause | https://github.com/eliben/pycparser |
-| External Lemonade / Whisper | Existing installation; not distributed or installed by this repository | https://github.com/lemonade-sdk/lemonade/blob/main/docs/api/openai.md |
+| Whisper.cpp | 1.9.5 build; pinned image digest in compose.yaml; MIT. Weights are external and not distributed | https://github.com/ggml-org/whisper.cpp |
+| PyInstaller | 6.22.3; GPL-2.0-or-later with bootloader distribution exception | https://pyinstaller.org/en/stable/license.html |
 | Win32 hotkey API | Windows system API | https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey |
 | Desktop USB constraints | Docker Desktop documentation | https://docs.docker.com/desktop/troubleshoot-and-support/faqs/general/ |
 
-The original application code is MIT licensed. Third-party software retains its own licenses. No model weights are included. Dependency vulnerability scanning, ARM portability, packaged executable distribution, microphone signal quality and hardware acceleration performance have not been independently validated by this project.
+The original application code is MIT licensed. Third-party software retains its own licenses. No model weights are included. Dependency vulnerability scanning, ARM portability, microphone signal quality and hardware acceleration performance have not been independently validated by this project.
+
+## Speech models and live phrases
+
+Put the three files listed in models.lock.json in WHISPER_MODEL_DIR. They come from a pinned upstream whisper.cpp model revision. Base.en is English only; Base and Large-v3 Turbo are multilingual, including English and Spanish. The selector loads one at a time through an allowlisted API; it never accepts an arbitrary model path. Files remain available. Opening the companion loads multilingual Base. The same Whisper container can serve the wider local assistant, so changing its model affects those requests too. Do not switch while another application is recording/transcribing.
+
+Local five-second fixtures took about 0.5 seconds with Base and 0.28 seconds in an English Base.en check, versus about 10–12 seconds with Turbo. These do not establish accuracy for your microphone; the larger model is an optional comparison, not the routine dictation default. CPU-only contexts and load times differ from the old native runtime.
+
+Enable **Live phrases — transcribe at short pauses** before recording for incremental dictation. The companion submits phrases after about 0.6 seconds of quiet, or after eight seconds of continuous speech, and appends results while recording continues. This is phrase-based incremental transcription, not native token-by-token streaming. The fixed energy threshold can miss quiet speech or treat noise as speech, and an eight-second boundary can cut a word. The bounded queue reports overload rather than storing unlimited audio; Base/Base.en are recommended. Leave it unchecked for the simpler stop-to-transcribe mode. Recording is still limited to two minutes.
+
+In live mode only the new phrase is pasted; the preview retains the combined transcript. A window switch suppresses automatic pasting for the rest of that recording. Held shortcut keys keep a phrase in preview rather than delaying a paste into a later recording. No Enter is sent. Always review text. Real microphone timing and application insertion remain user acceptance checks.
+
+## Public/private coordination
+
+Public reusable source and sanitized results live in this repository. The owner's paired private z13-ai-workspace-private repository holds deployment settings, handoffs and the public commit reference. AGENTS.md and CLAUDE.md tell each agent to pull current state, test and commit/push completed changes. Private details are represented here only by safe summaries. GitHub shares committed files, not chat history or model memory; each agent needs its own authorized access. Local GitHub Desktop synchronization can be once daily.

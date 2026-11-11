@@ -1,12 +1,37 @@
 name: local-whisper-dictation
 services:
+  whisper:
+    image: ghcr.io/ggml-org/whisper.cpp:main@sha256:5a7c4d82e5101a4fbbb047139c11638854a6452d1f4363fe3dff64bb758add32
+    entrypoint: [/app/build/bin/whisper-server]
+    command: [--host, 0.0.0.0, --port, '8080', --model, /models/ggml-base.bin, --language, auto, --threads, '8', --no-gpu]
+    volumes:
+      - type: bind
+        source: ${WHISPER_MODEL_DIR:?Set WHISPER_MODEL_DIR in .env}
+        target: /models
+        read_only: true
+    ports:
+      - "127.0.0.1:18081:8080"
+    user: '65534:65534'
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: ["/tmp:size=128m,mode=1777"]
+    mem_limit: 4g
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, curl, -f, http://127.0.0.1:8080/]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+    restart: unless-stopped
   dictation:
     build: .
-    image: local-whisper-dictation:0.1.0
+    image: local-whisper-dictation:0.2.0
     ports:
       - "127.0.0.1:17863:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      whisper:
+        condition: service_healthy
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]

@@ -5,3 +5,8 @@ __pycache__/
 .env
 local-settings.json
 *.log
+build/
+dist/
+portable/
+*.spec
+*.zip

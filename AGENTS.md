@@ -1,3 +1,5 @@
 # Repository rules
 
+Standing user rule: reflect completed changes in both public and private GitHub records, update READMEs/handoffs, and commit/push completed milestones. Public source is this repository; private deployment/coordination is the paired z13-ai-workspace-private repository. Private changes require only a safe public summary. Never expose secrets or private data to satisfy mirroring. Local GitHub Desktop copies may be synchronized once daily. Pull current state before work and use branches for concurrent agents.
+
 Read README.md and docs/README.md before editing. Keep this repository self-contained. Do not change an existing assistant, model cache or neighboring project. Never commit recordings, transcripts, personal paths, credentials or environments; use synthetic audio in memory for tests. Preserve loopback binding, fixed local upstream, input limits and non-root container restrictions. Distinguish gateway tests from Windows microphone/paste acceptance. Update the operating guide when behavior or dependencies change.

@@ -1,4 +1,4 @@
-"""Bounded WAV-only gateway to existing local Lemonade Whisper. No audio storage."""
+"""Bounded WAV gateway and allowlisted Docker Whisper model selection."""
 import io
 import json
 import threading
@@ -8,10 +8,35 @@ import uuid
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-UPSTREAM = 'http://host.docker.internal:13305/api/v1/audio/transcriptions'
-MODEL = 'Whisper-Large-v3-Turbo'
+UPSTREAM = 'http://whisper:8080/inference'
+MODEL = 'Whisper-Base'
+CATALOG = {
+    'base': ('Base — English + Spanish (fast)', 'ggml-base.bin'),
+    'base-en': ('Base.en — English only (fast)', 'ggml-base.en.bin'),
+    'turbo': ('Large-v3 Turbo — multilingual (slower CPU)', 'ggml-large-v3-turbo.bin'),
+}
+ACTIVE_MODEL = 'base'
 LIMIT = 4 * 1024 * 1024
 BUSY = threading.Lock()
+
+
+def model_catalog():
+    return {'active': ACTIVE_MODEL, 'models': [{'id': key, 'label': value[0]} for key, value in CATALOG.items()]}
+
+
+def select_model(model):
+    global ACTIVE_MODEL
+    if model not in CATALOG:
+        raise ValueError('Unknown model')
+    boundary = uuid.uuid4().hex
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\n'
+            f'/models/{CATALOG[model][1]}\r\n--{boundary}--\r\n').encode()
+    request = urllib.request.Request('http://whisper:8080/load', body,
+                                    {'Content-Type': 'multipart/form-data; boundary=' + boundary})
+    with urllib.request.urlopen(request, timeout=180) as response:
+        response.read()
+    ACTIVE_MODEL = model
+    return model_catalog()
 
 
 def validate_audio(data):
@@ -50,11 +75,31 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == '/models':
+            return self.reply(200, model_catalog())
         self.reply(200 if self.path == '/health' else 404,
                    {'status': 'ok', 'scope': 'gateway only'} if self.path == '/health' else {'error': 'Not found'})
 
     def do_POST(self):
         self.connection.settimeout(15)
+        if self.path == '/models/select':
+            if self.headers.get('Origin') or self.headers.get('Content-Type') != 'application/json':
+                return self.reply(403, {'error': 'Native JSON clients only'})
+            if not BUSY.acquire(blocking=False):
+                return self.reply(429, {'error': 'Transcription or model change already running'})
+            try:
+                size = int(self.headers.get('Content-Length', '0'))
+                if not 0 < size <= 1024:
+                    raise ValueError('Invalid selection request')
+                request = json.loads(self.rfile.read(size))
+                self.reply(200, select_model(request.get('model')))
+            except (ValueError, TypeError, AttributeError):
+                self.reply(400, {'error': 'Choose a listed model'})
+            except Exception:
+                self.reply(502, {'error': 'Model could not load; check mounted model files'})
+            finally:
+                BUSY.release()
+            return
         if self.path != '/transcribe':
             return self.reply(404, {'error': 'Not found'})
         # Browser pages must not be able to submit recordings to this local API.
@@ -73,7 +118,7 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, wave.Error, EOFError):
             self.reply(400, {'error': 'Invalid WAV or transcription response'})
         except Exception:
-            self.reply(502, {'error': 'Local Whisper unavailable; check Lemonade'})
+            self.reply(502, {'error': 'Whisper container unavailable; check Docker'})
         finally:
             BUSY.release()
 
