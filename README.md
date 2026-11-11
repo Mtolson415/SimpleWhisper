@@ -32,6 +32,7 @@ Setup installs pinned microphone dependencies into `.venv` and builds the gatewa
 
 1. Leave Lemonade and Docker Desktop running. Start the helper once.
 2. Select your microphone in the helper, then click the intended text field in Word, an email draft, or another ordinary desktop application.
+   **Dictate directly into active input** is checked by default. Uncheck it to keep transcripts in the helper for review and manual copying; automatic pasting and clipboard changes are disabled in this mode.
 3. Press **Ctrl+Alt+D**, speak, then press **Ctrl+Alt+D** again.
 4. Keep the same window active while transcription finishes. The helper requests a paste without pressing Enter.
 5. If the active window changes, the transcript stays in the helper for manual copy/paste.
@@ -44,7 +45,7 @@ Closing the helper stops microphone capture and releases the shortcut when its p
 - Five containerized tests passed for valid PCM, wrong format, truncated audio, duration limits and prevention of invalid upstream requests.
 - A synthetic English speech recording passed through this gateway and the installed Whisper model, returning the expected words and arithmetic question.
 - Windows microphone enumeration and default input format capability checks passed.
-- Four Windows tests cover focus-change suppression, held-key delay, paste without Enter, and WAV encoding. These use fake desktop calls and do not prove real application insertion.
+- Five Windows tests cover the direct-input checkbox, focus-change suppression, held-key delay, paste without Enter, and WAV encoding. These use fake desktop calls and do not prove real application insertion.
 - **User microphone speech, actual paste into Word/email, reboot behavior, and a fully disconnected run remain pending.** Health reports the gateway process only, not model availability. This is an early working implementation, not a completed system-wide acceptance claim.
 
 ## Privacy and limits

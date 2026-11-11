@@ -17,6 +17,8 @@ docker compose up -d --build
 
 Expected result: the helper opens with a microphone selector; the Docker gateway becomes healthy. Keep Lemonade running separately. Click an ordinary editable field, press Ctrl+Alt+D, speak, press again, then wait without changing windows. A transcript appears in the helper and a paste is requested in the active application. No form is submitted. Manual copy/paste is available if focus changed or paste is blocked.
 
+The **Dictate directly into active input** checkbox starts checked to preserve the original behavior. Uncheck it for review-only dictation: transcripts still appear in the helper, but no clipboard change or automatic paste happens. The option is checked again before a delayed paste, so turning it off also cancels a paste waiting for shortcut keys to be released. This setting resets to checked when the helper restarts. The foreground-window guard remains active when the option is checked.
+
 ## Troubleshooting
 
 | Symptom | Check and expected result |
@@ -47,7 +49,7 @@ docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --mo
 
 Tests generate silent PCM samples in memory; no personal files or network/model services are required. CI repeats these tests and checks Python syntax. CI cannot prove Windows microphone access, recognition accuracy or insertion into a real application.
 
-On Windows, `python -m unittest discover -s tests -v` additionally runs four tests using fake desktop calls for paste guards and encoding. Linux skips those desktop tests. The helper window was opened and visually checked on the development machine; it showed microphone selection, ready status and transcript recovery controls.
+On Windows, `python -m unittest discover -s tests -v` additionally runs five tests using fake desktop calls for the checkbox, paste guards and encoding. Linux skips those desktop tests. The helper window was opened and visually checked on the development machine; it showed microphone selection, ready status and transcript recovery controls.
 
 Manual acceptance: dictate “This is my local dictation test” into a scratch document; confirm start/stop status and actual words. Repeat with a window switch during recognition and confirm no automatic paste. Try the intended Word/email programs, then repeat with the network disconnected while local services remain running. Record results before claiming these checks passed. Do not use confidential material for a demonstration.
 

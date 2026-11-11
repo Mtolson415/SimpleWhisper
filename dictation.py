@@ -33,7 +33,7 @@ class App:
         self.user.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
         self.root = tk.Tk()
         self.root.title('Local Whisper Dictation')
-        self.root.geometry('620x320')
+        self.root.geometry('620x350')
         self.events = queue.Queue()
         self.stream = None
         self.busy = False
@@ -51,6 +51,9 @@ class App:
         self.microphone = ttk.Combobox(self.root, values=names, state='readonly', width=75)
         self.microphone.current(0)
         self.microphone.pack(padx=12, pady=5)
+        self.direct_input = tk.BooleanVar(value=True)
+        ttk.Checkbutton(self.root, text='Dictate directly into active input',
+                        variable=self.direct_input).pack(padx=12, pady=5)
         self.preview = tk.Text(self.root, height=7, wrap='word')
         self.preview.pack(fill='both', expand=True, padx=12)
         tk.Button(self.root, text='Copy transcript', command=self.copy).pack(pady=10)
@@ -126,6 +129,10 @@ class App:
         self.root.update_idletasks()
 
     def insert(self, text, attempts=0):
+        if not self.direct_input.get():
+            self.busy = False
+            self.status.set('Transcript ready below. Use Copy transcript to paste it yourself.')
+            return
         if self.user.GetForegroundWindow() != self.target:
             self.busy = False
             self.status.set('Window changed. Transcript retained below; copy and paste when ready.')

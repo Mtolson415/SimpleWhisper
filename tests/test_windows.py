@@ -21,7 +21,18 @@ class DesktopTests(unittest.TestCase):
         app.status = Mock()
         app.copy = Mock()
         app.busy = True
+        app.direct_input = Mock()
+        app.direct_input.get.return_value = True
         return app
+
+    def test_unchecked_direct_input_keeps_clipboard_and_keyboard_untouched(self):
+        app = self.app()
+        app.direct_input.get.return_value = False
+        app.insert('Synthetic test')
+        app.copy.assert_not_called()
+        app.user.keybd_event.assert_not_called()
+        app.user.GetForegroundWindow.assert_not_called()
+        self.assertFalse(app.busy)
 
     def test_window_switch_prevents_clipboard_and_paste(self):
         app = self.app()
