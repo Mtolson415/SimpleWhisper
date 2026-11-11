@@ -12,9 +12,15 @@ if sys.platform == 'win32':
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows helper test')
 class DesktopTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch('dictation.paste_shortcut')
+        self.paste = patcher.start()
+        self.addCleanup(patcher.stop)
+
     def app(self):
         app = App.__new__(App)
         app.target = 123
+        app.pending_pastes = []
         app.user = Mock()
         app.user.GetForegroundWindow.return_value = 123
         app.user.GetAsyncKeyState.return_value = 0
@@ -25,6 +31,79 @@ class DesktopTests(unittest.TestCase):
         app.direct_input = Mock()
         app.direct_input.get.return_value = True
         return app
+
+    def test_marker_only_text_never_reaches_clipboard_or_keyboard(self):
+        app = self.app()
+        app.insert('[BLANK_AUDIO]')
+        app.copy.assert_not_called()
+        app.user.keybd_event.assert_not_called()
+
+    def test_continuous_session_does_not_stop_at_two_minutes(self):
+        app = self.app()
+        app.events = queue.Queue()
+        app.frames = 16000 * 121
+        app.record_continuous = True
+        app.session_limit_seconds = None
+        app.record_live = True
+        app.record_rolling = False
+        app.segmenter = Mock()
+        app.segmenter.add.return_value = None
+        app.audio(b'\0\0' * 1600, 1600, None, False)
+        self.assertTrue(app.events.empty())
+        self.assertEqual(app.frames, 16000 * 121 + 1600)
+
+    def test_selected_auto_stop_limit_is_honored(self):
+        app = self.app()
+        app.events = queue.Queue()
+        app.frames = 16000 * 300
+        app.record_continuous = True
+        app.session_limit_seconds = 300
+        app.audio(b'\0\0' * 1600, 1600, None, False)
+        self.assertEqual(app.events.get_nowait(), ('limit', None))
+
+    def test_microphone_warning_does_not_stop_capture(self):
+        app = self.app()
+        app.events = queue.Queue()
+        app.frames = 0
+        app.record_continuous = True
+        app.session_limit_seconds = None
+        app.record_live = False
+        app.chunks = []
+        app.audio(b'\0\0' * 1600, 1600, None, True)
+        self.assertEqual(app.events.get_nowait()[0], 'audio_warning')
+        self.assertEqual(app.frames, 1600)
+
+    def test_temporary_docker_status_failures_do_not_close_companion(self):
+        app = self.app()
+        app.events = queue.Queue()
+        with patch('dictation.gateway_running', side_effect=[None, None, True, False]), patch('dictation.time.sleep'):
+            app.monitor_container()
+        self.assertEqual(app.events.qsize(), 1)
+        self.assertEqual(app.events.get_nowait(), ('container_stopped', None))
+
+    def test_full_phrase_queue_warns_and_keeps_recording(self):
+        app = self.app()
+        app.events = queue.Queue()
+        app.frames = 0
+        app.record_continuous = True
+        app.session_limit_seconds = None
+        app.record_live = True
+        app.record_rolling = False
+        app.segmenter = Mock()
+        app.segmenter.add.return_value = b'new phrase'
+        app.phrases = queue.Queue(maxsize=1)
+        app.phrases.put(b'old phrase')
+        app.audio(b'\0\0' * 1600, 1600, None, False)
+        self.assertEqual(app.events.get_nowait()[0], 'audio_warning')
+        self.assertEqual(app.phrases.get_nowait(), b'new phrase')
+        self.assertEqual(app.frames, 1600)
+
+    def test_three_docker_status_failures_close_companion(self):
+        app = self.app()
+        app.events = queue.Queue()
+        with patch('dictation.gateway_running', side_effect=[None, None, None]), patch('dictation.time.sleep'):
+            app.monitor_container()
+        self.assertEqual(app.events.get_nowait(), ('container_stopped', None))
 
     def test_unchecked_direct_input_keeps_clipboard_and_keyboard_untouched(self):
         app = self.app()
@@ -55,8 +134,7 @@ class DesktopTests(unittest.TestCase):
         app = self.app()
         app.insert('Synthetic test')
         app.copy.assert_called_once()
-        keys = [call.args[0] for call in app.user.keybd_event.call_args_list]
-        self.assertEqual(keys, [0x11, ord('V'), ord('V'), 0x11])
+        self.paste.assert_called_once_with()
         self.assertFalse(app.busy)
 
     def test_live_paste_copies_only_new_phrase_and_keeps_busy_state(self):
@@ -76,6 +154,37 @@ class DesktopTests(unittest.TestCase):
         app.insert('later phrase', live=True)
         app.copy.assert_not_called()
         app.user.keybd_event.assert_not_called()
+
+    def test_live_held_shortcut_queues_then_pastes_in_order(self):
+        app = self.app()
+        app.live_paste_suppressed = False
+        app.stream = Mock()
+        app.user.GetAsyncKeyState.return_value = 0x8000
+        app.insert('First', live=True)
+        app.insert(' second', live=True)
+        app.copy.assert_not_called()
+        app.user.GetAsyncKeyState.return_value = 0
+        app.flush_pastes()
+        app.copy.assert_called_once_with('First second')
+        self.paste.assert_called_once()
+        self.assertEqual(app.pending_pastes, [])
+
+    def test_pending_phrase_is_cancelled_after_focus_change(self):
+        app = self.app()
+        app.live_paste_suppressed = False
+        app.pending_pastes = ['Synthetic phrase']
+        app.user.GetForegroundWindow.return_value = 456
+        app.flush_pastes()
+        self.paste.assert_not_called()
+        self.assertEqual(app.pending_pastes, [])
+        self.assertTrue(app.live_paste_suppressed)
+
+    def test_blocked_input_is_reported(self):
+        app = self.app()
+        self.paste.side_effect = OSError('blocked')
+        self.assertFalse(app.insert('Synthetic phrase'))
+        self.assertIn('blocked paste', app.status.set.call_args.args[0])
+        self.assertFalse(app.busy)
 
     def test_recording_encoding_matches_gateway(self):
         with wave.open(io.BytesIO(wav_bytes(b'\0\0' * 16000)), 'rb') as audio:

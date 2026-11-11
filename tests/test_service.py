@@ -18,6 +18,10 @@ def sample(rate=16000, channels=1, duration=1):
 
 
 class AudioTests(unittest.TestCase):
+    def test_secondary_gateway_check_removes_recognition_markers(self):
+        with patch('service.urllib.request.urlopen') as upstream:
+            upstream.return_value.__enter__.return_value = io.BytesIO(b'{"text":"Hello [BLANK_AUDIO] world"}')
+            self.assertEqual(transcribe(sample()), 'Hello world')
     def test_catalog_does_not_expose_paths(self):
         catalog = model_catalog()
         self.assertEqual(len(catalog['models']), 3)

@@ -21,11 +21,11 @@ Expected: both gateway and Whisper become healthy. Click a text field, press Ctr
 
 ## Companion lifecycle and portable migration
 
-The Windows watcher detects both dictation services using Docker project/service labels. Starting them from the desktop shortcut or Docker Desktop opens the companion. Stopping/removing either service closes it without deleting source, executables or weights. Copy transcripts before stopping. Closing the companion manually keeps it closed until a stack start transition. The watcher reconnects after Docker restarts; Docker CLI failure is treated as a stopped stack. It polls every two seconds in your signed-in session. Duplicate instances are prevented with per-session named mutexes. No Docker socket is mounted into containers.
+The Windows watcher detects both dictation services using Docker project/service labels. Starting them from the desktop shortcut or Docker Desktop opens the companion. Stopping/removing either service closes it without deleting source, executables or weights. Copy transcripts before stopping. Closing the companion manually keeps it closed until a stack start transition. The watcher reconnects after Docker restarts; A confirmed container stop closes the companion. Transient Docker status failures are retried; three consecutive failures close it. It polls every two seconds in your signed-in session. Duplicate instances are prevented with per-session named mutexes. No Docker socket is mounted into containers.
 
 Move the portable bundle and model file to the new machine, install Docker Desktop, update `.env`, rerun Install-Shortcuts.ps1, then start. For offline migration, export/load the pinned images first. Shortcuts contain local paths and must be recreated after moving the folder. The user Startup shortcut opens the watcher at sign-in. To disable it, remove only that shortcut and exit the watcher. The executable is unsigned; binary signing and second-host acceptance remain pending.
 
-The **Dictate directly into active input** checkbox starts checked to preserve the original behavior. Uncheck it for review-only dictation: transcripts still appear in the helper, but no clipboard change or automatic paste happens. The option is checked again before a delayed paste, so turning it off also cancels a paste waiting for shortcut keys to be released. This setting resets to checked when the helper restarts. The foreground-window guard remains active when the option is checked.
+The **Dictate into active text box** checkbox starts checked to preserve the original behavior. Uncheck it for review-only dictation: transcripts still appear in the helper, but no clipboard change or automatic paste happens. The option is checked again before a delayed paste, so turning it off also cancels a paste waiting for shortcut keys to be released. This setting resets to checked when the helper restarts. The foreground-window guard remains active when the option is checked.
 
 ## Troubleshooting
 
@@ -60,7 +60,7 @@ Tests generate silent PCM samples in memory; no personal files or network/model 
 
 Additional mocked tests check container-stop events, Docker failures and requiring both model/gateway containers. Actual gateway stop closed the portable companion and a later start reopened it; tests do not establish reboot, second-host or real-application behavior.
 
-The suite has 23 tests: eight gateway/model-selection tests, four phrase-segmentation tests and eleven Windows helper tests. Linux skips Windows tests. Actual portable process checks also confirmed companion closure/reopening on gateway stop/restart, removal/recreation and model stop/restart. Paced synthetic live audio returned a phrase before recording ended. These do not prove actual microphone capture or Word/email input.
+Version 0.3.0 has 46 tests covering markers, segmentation, rolling queues, revision guards, gateway behavior and Windows controls. Linux skips Windows tests. Actual portable process checks also confirmed companion closure/reopening on gateway stop/restart, removal/recreation and model stop/restart. Paced synthetic live audio returned a phrase before recording ended. These do not prove actual microphone capture or Word/email input.
 
 Manual acceptance: dictate “This is my local dictation test” into a scratch document; confirm start/stop status and actual words. Repeat with a window switch during recognition and confirm no automatic paste. Try the intended Word/email programs, then repeat with the network disconnected while local services remain running. Record results before claiming these checks passed. Do not use confidential material for a demonstration.
 
@@ -91,10 +91,43 @@ Put the three files listed in models.lock.json in WHISPER_MODEL_DIR. They come f
 
 Local five-second fixtures took about 0.5 seconds with Base and 0.28 seconds in an English Base.en check, versus about 10–12 seconds with Turbo. These do not establish accuracy for your microphone; the larger model is an optional comparison, not the routine dictation default. CPU-only contexts and load times differ from the old native runtime.
 
-Enable **Live phrases — transcribe at short pauses** before recording for incremental dictation. The companion submits phrases after about 0.6 seconds of quiet, or after eight seconds of continuous speech, and appends results while recording continues. This is phrase-based incremental transcription, not native token-by-token streaming. The fixed energy threshold can miss quiet speech or treat noise as speech, and an eight-second boundary can cut a word. The bounded queue reports overload rather than storing unlimited audio; Base/Base.en are recommended. Leave it unchecked for the simpler stop-to-transcribe mode. Recording is still limited to two minutes.
+Enable **Live phrases — transcribe at short pauses** before recording for incremental dictation. The companion submits phrases after about 0.6 seconds of quiet, or after eight seconds of continuous speech, and appends results while recording continues. This is phrase-based incremental transcription, not native token-by-token streaming. The fixed energy threshold can miss quiet speech or treat noise as speech, and an eight-second boundary can cut a word. The bounded queue reports overload rather than storing unlimited audio; Base/Base.en are recommended. Leave it unchecked for the simpler stop-to-transcribe mode. Normal stop-to-transcribe recordings retain the two-minute limit. Continuous live sessions use the selected Auto-stop setting (Never by default).
 
 In live mode only the new phrase is pasted; the preview retains the combined transcript. A window switch suppresses automatic pasting for the rest of that recording. Held shortcut keys keep a phrase in preview rather than delaying a paste into a later recording. No Enter is sent. Always review text. Real microphone timing and application insertion remain user acceptance checks.
 
 ## Public/private coordination
 
 Public reusable source and sanitized results live in this repository. The owner's paired private z13-ai-workspace-private repository holds deployment settings, handoffs and the public commit reference. AGENTS.md and CLAUDE.md tell each agent to pull current state, test and commit/push completed changes. Private details are represented here only by safe summaries. GitHub shares committed files, not chat history or model memory; each agent needs its own authorized access. Local GitHub Desktop synchronization can be once daily.
+
+
+## Continuous mode, auto-stop and text quality (0.3.0)
+
+Continuous listening and live mode start enabled. Microphone capture still starts only with Ctrl+Alt+D. Auto-stop offers Never, 2, 5, 15 or 30 minutes of recording duration. Choose settings before starting. Never removes the former two-minute live-session cap. Normal non-live capture remains bounded at two minutes, and every network request, work queue and preview remains bounded even in a long continuous session.
+
+Microphone callback warnings do not end recording. A full phrase queue skips an older queued phrase and reports a warning while listening continues; use Base/Base.en to avoid falling behind. Confirmed container stops still close the companion. Three consecutive unknown Docker-status failures also close it; one-off failures no longer do so. Device disconnection, app/OS suspension and unavailable backend services cannot be guaranteed away by continuous mode.
+
+The deterministic secondary check removes known bracketed recognition markers (including BLANK_AUDIO) and known Whisper control tokens. Checks run at the gateway, client decode and final insertion boundary. Ordinary bracketed content is preserved. This is not grammar correction or semantic proofreading. If a literal removed marker is needed, type it manually.
+
+## Optional rolling drafts and post-insertion revisions
+
+Enable Rolling drafts with revisions before starting. It submits growing, overlapping snapshots roughly once per second while speech continues; a pause or eight-second phrase boundary finalizes a span. Pending snapshots for the same phrase coalesce instead of accumulating. The recognition process runs in Docker, independently of the Windows UI. One fast loaded model is used; duplicated model instances are not required for this baseline. Base/Base.en are recommended.
+
+Where a focused field supplies suitable Windows UI Automation text ranges, the companion can insert a provisional draft and revise only that inserted span. It checks field identity, caret position and the exact expected draft, and verifies the selected range before replacement. User edits, caret/focus changes, password fields and unsupported providers suppress revisions. There are no arbitrary Backspace sequences or whole-document rewrites. Unsupported fields retain rolling preview and receive final phrases using ordinary insertion. Compatibility is detected by the field's capabilities, not an application-name list; not every active text box is guaranteed to support revision.
+
+The Windows clipboard path uses immediate Unicode data rather than Tk delayed rendering, which caused a native crash during UI Automation integration testing. UI Automation 2.0.29 and comtypes 1.5.0 are pinned (Apache-2.0 and MIT). The endpoint comparison uses the native COM range interface to avoid a wrapper defect in this pinned version. Primary API guidance: https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-usingtextrangeobjects and https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata .
+
+Actual controlled WPF field tests verified initial insertion, replacement of only the draft, and preservation of surrounding synthetic text. A paced synthetic speech test produced its first rolling hypothesis before recording ended. These are narrower than live microphone acceptance in Word, browsers or desktop chat applications. Windows UI behavior, long-duration hardware stability, reboot/offline operation and second-host acceptance still need their own checks.
+
+Builds go to a versioned portable folder so a new build can be prepared while the previous listener is open. The portable ZIP still uses the standard extracted folder layout. The desktop launcher explicitly opens the companion as well as its watcher, so manually closing the helper no longer requires a container restart to reopen it. Install-Shortcuts updates an old watcher without killing an active recorder; a listener restart activates the new executable.
+
+## Design reference library
+
+[The 87-site reference library](DESIGN-REFERENCE-LIBRARY.md) covers complete websites, app screens, components, themes, typography, icons, illustrations, motion, 3D models, templates, desktop toolkits and AI model catalogs. Start with a few clear visual references and preserve tested recording behavior during redesign.
+
+## Compact layout and paste repair (0.3.1)
+
+The full Dictate into active text box label is visible. Labeled microphone/model selectors fill their rows, settings use two columns, and the transcript resizes with a scrollbar. A minimum window size keeps controls accessible.
+
+Live phrases now wait for shortcut keys to be released instead of being discarded. Pending text is bounded to 20,000 characters and cancelled on destination change, disabling direct input, or starting a new recording. Native SendInput submits a checked Ctrl+V batch and reports blocked input; no Enter is sent. Elevated apps remain unsupported. After changing windows, restart recording in the intended text field or copy the preview manually.
+
+Validation: 51 ordinary Windows tests passed; 28 containerized Linux tests passed with 24 platform/interactive skips. The additional opt-in synthetic scratch-field test passed real Unicode insertion and preserved existing text. Run with DICTATION_DESKTOP_TEST=1 and focus the test window within 20 seconds. It never opens the microphone. This does not establish microphone-to-app acceptance, every application's compatibility, reboot behavior or disconnected operation.

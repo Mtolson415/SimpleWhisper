@@ -7,6 +7,7 @@ import urllib.request
 import uuid
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from transcript_quality import clean_transcript
 
 UPSTREAM = 'http://whisper:8080/inference'
 MODEL = 'Whisper-Base'
@@ -61,7 +62,7 @@ def transcribe(data):
         result = json.load(response)
     if not isinstance(result.get('text'), str):
         raise ValueError('Whisper returned no transcript')
-    return result['text'].strip()
+    return clean_transcript(result['text'])
 
 
 class Handler(BaseHTTPRequestHandler):

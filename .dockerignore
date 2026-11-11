@@ -1,3 +1,6 @@
 *
 !service.py
 !audio_segments.py
+!transcript_quality.py
+!rolling_audio.py
+!revision_span.py
