@@ -1,0 +1,20 @@
+name: local-whisper-dictation
+services:
+  dictation:
+    build: .
+    image: local-whisper-dictation:0.1.0
+    ports:
+      - "127.0.0.1:17863:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
