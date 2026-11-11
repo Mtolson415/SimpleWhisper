@@ -1,5 +1,7 @@
 # Local Whisper Dictation
 
+[![Tests](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml/badge.svg)](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml)
+
 Dictate into a Windows text field with **Ctrl+Alt+D**, using an existing local Whisper model. Press once to record, speak, then press again to transcribe and paste. Review the text before sending it.
 
 This project separates desktop dictation from a chat application. It does not require Open WebUI, a cloud speech account, or a language model to rewrite the transcript.
@@ -42,6 +44,7 @@ Closing the helper stops microphone capture and releases the shortcut when its p
 - Five containerized tests passed for valid PCM, wrong format, truncated audio, duration limits and prevention of invalid upstream requests.
 - A synthetic English speech recording passed through this gateway and the installed Whisper model, returning the expected words and arithmetic question.
 - Windows microphone enumeration and default input format capability checks passed.
+- Four Windows tests cover focus-change suppression, held-key delay, paste without Enter, and WAV encoding. These use fake desktop calls and do not prove real application insertion.
 - **User microphone speech, actual paste into Word/email, reboot behavior, and a fully disconnected run remain pending.** Health reports the gateway process only, not model availability. This is an early working implementation, not a completed system-wide acceptance claim.
 
 ## Privacy and limits

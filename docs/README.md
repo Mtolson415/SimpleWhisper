@@ -47,6 +47,8 @@ docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges --mo
 
 Tests generate silent PCM samples in memory; no personal files or network/model services are required. CI repeats these tests and checks Python syntax. CI cannot prove Windows microphone access, recognition accuracy or insertion into a real application.
 
+On Windows, `python -m unittest discover -s tests -v` additionally runs four tests using fake desktop calls for paste guards and encoding. Linux skips those desktop tests. The helper window was opened and visually checked on the development machine; it showed microphone selection, ready status and transcript recovery controls.
+
 Manual acceptance: dictate “This is my local dictation test” into a scratch document; confirm start/stop status and actual words. Repeat with a window switch during recognition and confirm no automatic paste. Try the intended Word/email programs, then repeat with the network disconnected while local services remain running. Record results before claiming these checks passed. Do not use confidential material for a demonstration.
 
 ## Stop, recover, remove
