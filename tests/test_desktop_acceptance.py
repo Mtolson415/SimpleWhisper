@@ -47,6 +47,7 @@ class ScratchFieldAcceptance(unittest.TestCase):
         app.status = tk.StringVar(root)
         app.direct_input = tk.BooleanVar(root, value=True)
         app.busy = True
+        app.record_locked = False
         self.assertTrue(app.insert('Hello, español.'))
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline:

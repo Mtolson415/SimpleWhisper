@@ -1,6 +1,6 @@
 function Resolve-DictationCompanion {
     foreach ($relativePath in @(
-        'portable\v0.3.1\LocalWhisperDictation\LocalWhisperDictation.exe',
+        'portable\v0.4.0\LocalWhisperDictation\LocalWhisperDictation.exe',
         'portable\LocalWhisperDictation\LocalWhisperDictation.exe'
     )) {
         $candidatePath = Join-Path $PSScriptRoot $relativePath

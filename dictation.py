@@ -20,6 +20,7 @@ from rolling_audio import RollingPhraseBuffer, LatestJobs
 from revision_span import RevisionSpan
 from windows_clipboard import set_clipboard_text
 from windows_input import paste_shortcut
+from locked_target import LockedTarget
 
 ENDPOINT = 'http://127.0.0.1:17863/transcribe'
 RATE = 16000
@@ -98,9 +99,11 @@ class App:
     def __init__(self):
         self.user = ctypes.WinDLL('user32', use_last_error=True)
         self.user.GetForegroundWindow.restype = wintypes.HWND
+        self.user.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+        self.user.GetAncestor.restype = wintypes.HWND
         self.user.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
         self.root = tk.Tk()
-        self.root.title('Local Whisper Dictation 0.3.1')
+        self.root.title('Local Whisper Dictation 0.4.0')
         self.root.geometry('640x460')
         self.root.minsize(600, 420)
         self.events = queue.Queue()
@@ -115,6 +118,8 @@ class App:
         self.session_limit_seconds = None
         self.live_paste_suppressed = False
         self.pending_pastes = []
+        self.record_locked = False
+        self.locked_target = None
         self.status = tk.StringVar(value='Click a text field in another app. Ctrl+Alt+D starts/stops.')
         panel = ttk.Frame(self.root, padding=12)
         panel.pack(fill='both', expand=True)
@@ -167,6 +172,9 @@ class App:
         self.always_on_top = tk.BooleanVar(value=False)
         ttk.Checkbutton(options, text='Always on top', variable=self.always_on_top,
                         command=self.set_always_on_top).grid(row=0, column=1, sticky='w', pady=3)
+        self.lock_input = tk.BooleanVar(value=True)
+        self.lock_checkbox = ttk.Checkbutton(options, text='Lock to starting text box', variable=self.lock_input)
+        self.lock_checkbox.grid(row=3, column=0, columnspan=2, sticky='w', pady=3)
         ttk.Label(panel, text='Transcript preview').grid(row=4, column=0, columnspan=2, sticky='w', pady=(4, 4))
         transcript = ttk.Frame(panel)
         transcript.grid(row=5, column=0, columnspan=2, sticky='nsew')
@@ -177,6 +185,8 @@ class App:
         self.preview.pack(side='left', fill='both', expand=True)
         ttk.Button(panel, text='Copy transcript', command=self.copy).grid(
             row=6, column=0, columnspan=2, sticky='e', pady=(8, 0))
+        self.root.update_idletasks()
+        self.own_window = self.user.GetAncestor(self.root.winfo_id(), 2)
         self.root.protocol('WM_DELETE_WINDOW', self.close)
         threading.Thread(target=self.hotkeys, daemon=True).start()
         threading.Thread(target=self.monitor_container, daemon=True).start()
@@ -278,7 +288,15 @@ class App:
             self.chunks.clear()
             threading.Thread(target=self.recognize, args=(pcm,), daemon=True).start()
             return
+        if self.direct_input.get() and target == self.user.GetAncestor(self.root.winfo_id(), 2):
+            self.status.set('Click the destination text box first, then press Ctrl+Alt+D to record.')
+            return
+        if self.direct_input.get() and self.user.GetForegroundWindow() != target:
+            self.status.set('Destination changed before recording started. Click the text box and press Ctrl+Alt+D again.')
+            return
         self.target = target
+        self.record_locked = self.lock_input.get()
+        self.locked_target = LockedTarget.begin() if self.record_locked and self.direct_input.get() else None
         self.pending_pastes.clear()
         self.chunks = []
         self.frames = 0
@@ -307,6 +325,11 @@ class App:
             self.status.set('Rolling drafts — updates while speaking; Ctrl+Alt+D stops.' if self.record_rolling else
                             'Live phrases — pause briefly for text; Ctrl+Alt+D stops.' if self.record_live
                             else 'Recording — Ctrl+Alt+D to stop. Maximum two minutes.')
+            if self.record_locked:
+                if self.locked_target and self.locked_target.background_supported:
+                    self.status.set('Text box locked, including background updates. Ctrl+Alt+D stops.')
+                else:
+                    self.status.set('Background lock unavailable here. Keep the starting text box focused; preview retains text.')
         except Exception as error:
             self.stop()
             if self.record_live:
@@ -359,6 +382,10 @@ class App:
         self.events.put(('live_finished', None))
 
     def remember_draft(self, span, text, final):
+        if self.user.GetForegroundWindow() != self.target:
+            self.draft_abandoned = True
+            self.draft_span = None
+            return
         if not span.record(text):
             self.live_paste_suppressed = True
             self.status.set('Could not verify the inserted span. Revisions stopped; use the preview.')
@@ -371,15 +398,27 @@ class App:
             self.draft_phrase = phrase
             self.draft_span = None
             self.draft_inserted = False
+            self.draft_abandoned = False
             self.draft_prefix = ' ' if self.completed_text else ''
             self.draft_last = ''
+            if not self.record_locked:
+                self.target = self.user.GetForegroundWindow()
         shown = self.completed_text + self.draft_prefix + text
         self.preview.delete('1.0', 'end')
         self.preview.insert('1.0', shown[-20000:])
+        if self.record_locked and self.locked_target and self.locked_target.background_supported:
+            if text and self.direct_input.get() and not self.live_paste_suppressed:
+                if self.write_locked(self.draft_prefix + text, revise=self.draft_inserted):
+                    self.draft_inserted = True
+            if final:
+                self.completed_text = shown[-20000:]
+            return
         if text and self.direct_input.get() and not self.live_paste_suppressed:
             if self.user.GetForegroundWindow() != self.target:
-                self.live_paste_suppressed = True
-            elif not any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
+                self.draft_abandoned = True
+                self.draft_span = None
+                self.status.set('Paste paused. Return to the original text box; the next phrase will resume there.')
+            elif not self.draft_abandoned and not any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
                 outgoing = self.draft_prefix + text
                 if not self.draft_inserted:
                     span = RevisionSpan.begin()
@@ -433,14 +472,21 @@ class App:
         if (not self.direct_input.get() or self.live_paste_suppressed
                 or self.user.GetForegroundWindow() != self.target):
             self.pending_pastes.clear()
-            self.live_paste_suppressed = True
-            self.status.set('Destination changed. Transcript retained; use Copy transcript.')
+            self.status.set('Paste paused. Return to the original text box; new phrases will resume there.')
             return
         if any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
             return
         text = ''.join(self.pending_pastes)
         self.pending_pastes.clear()
         self.insert(text, live=True)
+
+    def write_locked(self, text, revise=False):
+        if self.locked_target.write(text, revise=revise):
+            self.status.set('Text sent to locked box. Ctrl+Alt+D stops recording.')
+            return True
+        self.live_paste_suppressed = True
+        self.status.set('Locked box changed or rejected input. Text retained in preview; stop and restart to relock.')
+        return False
 
     def insert(self, text, attempts=0, live=False):
         prefix = text[:len(text) - len(text.lstrip(' \t'))]
@@ -457,12 +503,29 @@ class App:
                 self.busy = False
             self.status.set('Transcript ready below. Use Copy transcript to paste it yourself.')
             return
+        if self.record_locked:
+            if self.locked_target and self.locked_target.background_supported:
+                result = self.write_locked(text)
+                if not live:
+                    self.busy = False
+                return result
+            if self.locked_target is None or not self.locked_target.is_focused():
+                if not live:
+                    self.busy = False
+                self.status.set('Background lock unavailable. Return to the starting text box or copy the preview.')
+                return False
+        else:
+            self.target = self.user.GetForegroundWindow()
+            if self.target == getattr(self, 'own_window', None):
+                if not live:
+                    self.busy = False
+                self.status.set('Click a destination text box; transcript retained in preview.')
+                return False
         if self.user.GetForegroundWindow() != self.target:
-            if live:
-                self.live_paste_suppressed = True
-            else:
+            if not live:
                 self.busy = False
-            self.status.set('Window changed. Transcript retained below; copy and paste when ready.')
+            self.status.set('Paste paused. Return to the original text box; new phrases will resume there.' if live else
+                            'Window changed. Transcript retained below; copy and paste when ready.')
             return
         if any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
             if live:
@@ -527,6 +590,7 @@ class App:
                     self.insert(prefix + value, live=True)
                 elif event == 'live_finished':
                     self.busy = False
+                    self.locked_target = None
                     self.status.set('Live recording finished. Review the transcript.')
                 elif event == 'live_error':
                     self.status.set(value)
@@ -559,6 +623,7 @@ class App:
         self.continuous_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
         self.auto_stop.configure(state='disabled' if self.busy or self.stream else 'readonly')
         self.rolling_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
+        self.lock_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
         self.root.after(50, self.poll)
 
     def close(self):

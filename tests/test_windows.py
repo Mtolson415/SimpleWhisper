@@ -20,7 +20,11 @@ class DesktopTests(unittest.TestCase):
     def app(self):
         app = App.__new__(App)
         app.target = 123
+        app.stream = None
         app.pending_pastes = []
+        app.record_locked = True
+        app.locked_target = Mock(background_supported=False)
+        app.locked_target.is_focused.return_value = True
         app.user = Mock()
         app.user.GetForegroundWindow.return_value = 123
         app.user.GetAsyncKeyState.return_value = 0
@@ -145,15 +149,87 @@ class DesktopTests(unittest.TestCase):
         app.copy.assert_called_once_with(' new phrase')
         self.assertTrue(app.busy)
 
-    def test_live_window_switch_suppresses_rest_of_session(self):
+    def test_live_window_switch_pauses_then_resumes_in_original_window(self):
         app = self.app()
         app.live_paste_suppressed = False
         app.user.GetForegroundWindow.return_value = 456
         app.insert('first phrase', live=True)
+        app.copy.assert_not_called()
+        self.paste.assert_not_called()
         app.user.GetForegroundWindow.return_value = 123
         app.insert('later phrase', live=True)
+        app.copy.assert_called_once_with('later phrase')
+        self.paste.assert_called_once()
+        self.assertFalse(app.live_paste_suppressed)
+
+    def test_start_from_companion_requests_destination_without_opening_microphone(self):
+        app = self.app()
+        app.busy = False
+        app.user.GetAncestor.return_value = 123
+        with patch('dictation.sd.RawInputStream') as microphone:
+            app.toggle(123)
+        microphone.assert_not_called()
+        self.assertIn('destination text box first', app.status.set.call_args.args[0])
+
+    def test_revision_safety_stop_remains_latched(self):
+        app = self.app()
+        app.live_paste_suppressed = True
+        app.insert('Later phrase', live=True)
+        self.paste.assert_not_called()
+
+    def test_locked_background_update_never_sends_global_keys_or_clipboard(self):
+        app = self.app()
+        app.live_paste_suppressed = False
+        app.locked_target = Mock(background_supported=True)
+        app.locked_target.write.return_value = True
+        app.user.GetForegroundWindow.return_value = 456
+        self.assertTrue(app.insert('Synthetic phrase', live=True))
+        app.locked_target.write.assert_called_once_with('Synthetic phrase', revise=False)
+        self.paste.assert_not_called()
         app.copy.assert_not_called()
-        app.user.keybd_event.assert_not_called()
+
+    def test_unlocked_mode_follows_current_window(self):
+        app = self.app()
+        app.record_locked = False
+        app.live_paste_suppressed = False
+        app.user.GetForegroundWindow.return_value = 456
+        self.assertTrue(app.insert('Synthetic phrase', live=True))
+        self.assertEqual(app.target, 456)
+        self.paste.assert_called_once()
+
+    def test_locked_unsupported_field_never_redirects_to_other_field(self):
+        app = self.app()
+        app.live_paste_suppressed = False
+        app.locked_target.is_focused.return_value = False
+        self.assertFalse(app.insert('Synthetic phrase', live=True))
+        self.paste.assert_not_called()
+        app.copy.assert_not_called()
+
+    def test_rolling_focus_change_skips_disrupted_phrase_then_resumes_next(self):
+        app = self.app()
+        app.live_paste_suppressed = False
+        app.draft_phrase = None
+        app.completed_text = ''
+        app.preview = Mock()
+        app.user.GetForegroundWindow.return_value = 456
+        app.render_draft(1, 'First draft', False)
+        app.user.GetForegroundWindow.return_value = 123
+        app.render_draft(1, 'First phrase', True)
+        self.paste.assert_not_called()
+        with patch('dictation.RevisionSpan.begin', return_value=None):
+            app.render_draft(2, 'Second phrase', True)
+        app.copy.assert_called_once_with(' Second phrase')
+        self.assertFalse(app.live_paste_suppressed)
+
+    def test_focus_change_before_draft_verification_does_not_latch_edit_stop(self):
+        app = self.app()
+        app.live_paste_suppressed = False
+        app.user.GetForegroundWindow.return_value = 456
+        span = Mock()
+        app.remember_draft(span, 'Synthetic draft', False)
+        span.record.assert_not_called()
+        self.assertTrue(app.draft_abandoned)
+        self.assertFalse(app.live_paste_suppressed)
 
     def test_live_held_shortcut_queues_then_pastes_in_order(self):
         app = self.app()
@@ -177,7 +253,7 @@ class DesktopTests(unittest.TestCase):
         app.flush_pastes()
         self.paste.assert_not_called()
         self.assertEqual(app.pending_pastes, [])
-        self.assertTrue(app.live_paste_suppressed)
+        self.assertFalse(app.live_paste_suppressed)
 
     def test_blocked_input_is_reported(self):
         app = self.app()

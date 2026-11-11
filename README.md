@@ -38,8 +38,8 @@ Setup installs pinned microphone dependencies and builds the gateway. Build-Port
    **Dictate into active text box** is checked by default. Uncheck it to keep transcripts in the helper for review and manual copying; automatic pasting and clipboard changes are disabled in this mode.
 3. Press **Ctrl+Alt+D**, speak, then press **Ctrl+Alt+D** again.
    For text during recording, enable **Live phrases — transcribe at short pauses** first. It updates at pauses or eight-second phrase boundaries; this is incremental phrase recognition, not word-by-word streaming. Base/Base.en are recommended.
-4. Keep the same window active while transcription finishes. The helper requests a paste without pressing Enter.
-5. If the active window changes, the transcript stays in the helper for manual copy/paste.
+4. With Lock to starting text box enabled, the helper captures the exact field at recording start. Compatible plain fields can keep receiving text after you click elsewhere. Other fields require the starting field to remain focused. No Enter is sent.
+5. Turn Lock to starting text box off to follow the currently focused text box for each new phrase. Rolling revisions never follow a different field mid-phrase.
 
 Version 0.3.0 adds **Continuous listening**, enabled with live mode by default. **Auto-stop** offers Never (default), 2, 5, 15 or 30 minutes of recording. Listening starts only when you press the shortcut. Never removes the old two-minute live-session cutoff while each audio request and the work queue remain bounded. Microphone warnings and one-off Docker status failures no longer immediately stop the listener.
 
@@ -54,7 +54,7 @@ Install-Shortcuts adds desktop Start/Stop shortcuts and a **Whisper Dictation Co
 ## Current verification — 2026-11-11
 
 - Local Docker build/start and gateway health check passed.
-- Version 0.3.1 has 52 checks: 51 pass in the ordinary Windows run and one interactive check is opt-in. Linux passes 28 and skips 24 platform/interactive checks. Earlier results remain historical evidence.
+- Version 0.4.0 has 69 checks: 67 pass in the ordinary Windows run and two interactive checks are opt-in. Linux passes 37 and skips 32 platform/interactive checks. The real two-field background insertion/revision check also passed locally; earlier results remain historical evidence.
 - Synthetic five-second English/Spanish clips took 0.51–0.55 seconds with Base. An English selector test took 0.28 seconds with Base.en, 0.52 seconds with Base and 9.74 seconds with Turbo. All three model load/transcription checks passed. These are sample observations, not speed or accuracy guarantees.
 - Windows microphone enumeration and default input format capability checks passed.
 - Five Windows tests cover the direct-input checkbox, focus-change suppression, held-key delay, paste without Enter, and WAV encoding. These use fake desktop calls and do not prove real application insertion.
@@ -82,3 +82,21 @@ The full Dictate into active text box label is visible. Labeled microphone/model
 Live phrases now wait for shortcut keys to be released instead of being discarded. Pending text is bounded to 20,000 characters and cancelled on destination change, disabling direct input, or starting a new recording. Native SendInput submits a checked Ctrl+V batch and reports blocked input; no Enter is sent. Elevated apps remain unsupported. After changing windows, restart recording in the intended text field or copy the preview manually.
 
 Validation: 51 ordinary Windows tests passed; 28 containerized Linux tests passed with 24 platform/interactive skips. The additional opt-in synthetic scratch-field test passed real Unicode insertion and preserved existing text. Run with DICTATION_DESKTOP_TEST=1 and focus the test window within 20 seconds. It never opens the microphone. This does not establish microphone-to-app acceptance, every application's compatibility, reboot behavior or disconnected operation.
+
+## Focus-guard correction (0.3.2)
+
+User-reported failure: recognition reached the preview but status said Window changed. The older stop-to-transcribe default and the newer continuous-live default handled a window switch differently: live mode permanently latched paste suppression for that session. Version 0.3.2 pauses ordinary live insertion only while away from the original window, resumes new phrases upon return, and discards pending pastes on a switch rather than replaying them. Rolling draft revision stops remain strict because they protect previously inserted text. Starting a direct-input recording while the companion itself is focused now asks the user to click the intended destination first.
+
+The native clipboard and checked paste batch are retained: the reported status shows paste was blocked before either was called. The earlier scratch-field success did not verify this focus-transition path or Codex compatibility. New regression tests exercise pause/return/resume, no insertion into a different window, and the companion-start guard. Codex microphone-to-chat acceptance remains user verification; do not describe it as passed.
+
+## Destination lock and ordinary dictation (0.4.0)
+
+**Dictate into active text box** controls whether any automatic input is allowed. **Lock to starting text box** starts checked and is fixed for a recording: click the intended field before Ctrl+Alt+D. Stop finishes already-recorded audio, then releases the destination. The next recording captures a new field. With lock off, finalized phrases follow the active window; the companion never pastes into its own preview automatically.
+
+Compatible plain Edit fields exposing writable ValuePattern and an exact TextPattern selection/value mapping support locked background updates. Only that captured field is addressed; global Ctrl+V and the clipboard are not used for these writes. Original prefix/suffix are preserved, including when a selected span is replaced. The current value and control identity are checked before each update. A detected manual edit, disappearance, read-only change or rejected write stops automatic writes until a new recording. Field content exists only in memory and is bounded to 20,000 characters. Accessibility providers can briefly move focus during SetValue; the companion restores the previously focused control afterward. This is not a guarantee of imperceptible focus changes or atomicity against simultaneous typing.
+
+Unsupported fields display Background lock unavailable and retain text in preview when the starting field is no longer focused. They never silently redirect a locked recording to another field. A whole rich document is not rewritten to simulate background insertion. Compatibility in Codex, browsers and Word remains unverified; the capability message describes the detected field rather than promising support for every app.
+
+Rolling drafts remain experimental and off by default. Ordinary live phrases do not depend on the revision path. Compatible background locks can revise the last inserted draft using the same checked field state. Other rolling fields skip a phrase disrupted by a window switch and may resume later phrases; user edits still stop revisions. The previous permanent window-change latch has been removed for ordinary live dictation.
+
+Validation: 67 ordinary Windows tests passed, two interactive tests skipped; Linux passed 37 with 32 skips. The opt-in two-field WPF test passed background Unicode insertion, last-draft revision, preservation of the other field and restoration of focus. Run it with DICTATION_DESKTOP_TEST=1 using unittest discover -s tests -p test_background_acceptance.py. The fixture contains synthetic text only and opens no microphone. These checks do not establish the user's microphone-to-application acceptance.

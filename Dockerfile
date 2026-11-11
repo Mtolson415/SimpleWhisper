@@ -5,6 +5,7 @@ COPY audio_segments.py ./
 COPY transcript_quality.py ./
 COPY rolling_audio.py ./
 COPY revision_span.py ./
+COPY locked_target.py ./
 USER 65534:65534
 EXPOSE 8080
 CMD ["python", "-B", "service.py"]
