@@ -44,12 +44,12 @@ Green means capture enabled; red means off. Green does not prove recognition or 
 <summary><strong>How does speech reach my text field?</strong></summary>
 
 ```mermaid
-flowchart LR
-    A[Windows microphone] --> B[Bounded phrase queue]
-    B --> C[Local Docker gateway]
+flowchart TD
+    A[Microphone] --> B[Phrase queue]
+    B --> C[Local gateway]
     C --> D[Whisper.cpp]
-    D --> E[Clipboard + Ctrl+V]
-    E --> F[Active external field]
+    D --> E[Clipboard]
+    E --> F[Text field]
 ```
 
 Phrases end at roughly 0.6 seconds of quiet or eight seconds of speech. Stale results are discarded after detected destination/session changes. Keep focus steady: native handles cannot distinguish every logical field inside a browser window.
