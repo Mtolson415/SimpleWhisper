@@ -1,4 +1,4 @@
-# Operating and learning guide - 0.5.0
+# Operating and learning guide - 0.5.1
 
 ## Current choices
 
@@ -25,11 +25,11 @@ Base supports English/Spanish and is the fast default. Base.en is English only. 
 
 ## Packaging, preferences and recovery
 
-Build-Portable.ps1 builds portable/v0.5.0 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher and updates the user Startup watcher, both using the existing Tk feather resource from the bundled Tk DLL. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
+Build-Portable.ps1 builds portable/v0.5.1 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher using the existing Tk feather resource from the bundled Tk DLL and removes this project's old resident Startup watcher. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
 
-The Windows watcher is required because a container cannot open a user's desktop app directly. Confirmed container stops close the companion. Three consecutive unknown Docker-status results also close it; isolated failures do not. Closing the companion stops capture. Start-Dictation explicitly reopens it. Nothing in this UI rollback deletes containers, model weights or configuration.
+Closing the app stops the microphone, cancels pending input and stops both project-owned speech containers (gateway and Whisper). The window reports Stopping dictation services until shutdown is verified. If cleanup cannot be confirmed, the visible app reports the error and allows closing again to retry rather than silently claiming success.
 
-No separate desktop Stop shortcut is needed for normal use: close the app to stop listening. Containers remain running for reuse by this or other local tools. Stop-Dictation.ps1 is retained for optional backend shutdown. The shortcut icon reuses the existing feather resource rather than introducing a different microphone logo or a new image dependency.
+A wait-only lifetime helper watches the app's inherited process handle. It is active only while the app runs and exits after cleanup. If the app is forcibly terminated, the helper attempts the same scoped cleanup. There is no persistent sign-in/container watcher and no automatic reopening when containers start in Docker Desktop. The normal desktop shortcut starts both services and the app; launch failure also stops the owned services. Stop-Dictation.ps1 remains a recovery command, not a second desktop shortcut. Docker Desktop and unrelated containers are not stopped, and no model files, volumes or configuration are deleted.
 
 LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model choices. The listener always starts off. Removing that preferences file resets those choices; do not delete model files or private .env to reset the UI. Earlier source/portable versions remain recovery history, not the default launcher.
 
@@ -38,7 +38,7 @@ LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model ch
 | Symptom | Check |
 |---|---|
 | No text in the destination | Verify green listening, the correct microphone and loaded model. Click the intended external field and read the short status message. |
-| Old transcript-panel interface appears | Close older companions and launch the current desktop shortcut; the current title is Whisper Dictation 0.5.0. |
+| Old transcript-panel interface appears | Close older companions and launch the current desktop shortcut; the current title is Whisper Dictation 0.5.1. |
 | Destination changed | That delayed phrase was discarded. Keep focus steady for a phrase; new speech is allowed immediately. |
 | Microphone unavailable | Turn listening off, select the intended device in settings, save and retry. Windows privacy settings are not changed. |
 | Model/recognition unavailable | Check both Docker containers and the external model mount. Health alone does not prove model availability. |
@@ -65,3 +65,11 @@ Other tests cover routing, own-process exclusion, stale sessions, held-key defer
 Windows Python 3.14.7 was tested; Dockerfile digest-pins Python 3.14.0-slim (Python PSF/Debian component licenses). Pinned dependencies: sounddevice 0.5.6 (MIT), CFFI 2.1.1 (MIT-0), pycparser 3.12 (BSD-3-Clause), PyInstaller 6.22.3 (GPL with bootloader exception). The sounddevice wheel bundles PortAudio under its upstream license. whisper.cpp 1.9.5 is image-digest pinned in compose.yaml (MIT); weights are external. Windows APIs are system components. The original source is MIT. No new package is required for the dark UI.
 
 Read [the primary-source review](IMPLEMENTATION-REVIEW.md), [repository map](REPOSITORIES.md) and [handoff](../HANDOFF.md) before further work. Pull guidance, preserve user work, test and push completed milestones to the public/private pair. GitHub shares committed files, not chat history or model memory. Never commit recordings, transcripts, weights, private chat data, credentials or backups, even privately.
+
+## Exit ownership and v1.0 gate
+
+The latest direction requires no dictation-owned background processes after exit. Normal shutdown verifies both scoped containers are stopped; a process-handle supervisor covers abnormal owner termination and then exits. Only services with this project's Compose label and the allowlisted dictation/whisper service label are stopped. Other local AI containers and the shared Docker engine remain outside this app's ownership.
+
+The simplified interface needs no feature expansion for v1.0. Actual packaged normal/forced-exit cleanup and close/reopen checks passed. The remaining release gate is real microphone-to-intended-application acceptance after the earlier input regressions, including a continuous listening/off/on trial. Record those results before calling v1.0 ready. General OS failure, a stopped Docker daemon or a forcibly killed cleanup helper cannot be guaranteed away; cleanup failures are not reported as success.
+
+Packaged lifecycle acceptance uses DICTATION_LIFECYCLE_TEST=1 with unittest discover -s tests -p test_packaged_lifecycle.py. It starts the current package twice, opens no microphone, closes only its own window in the normal case and terminates only its own process in the forced case. Both cases verified no running dictation containers or project helper processes and preservation of unrelated container IDs. The inherited singleton guard and launcher wait also prevent a new owner from starting while prior cleanup is finishing. The installer removes the old resident Startup watcher; final installed state is closed with no dictation-owned services running.

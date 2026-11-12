@@ -4,7 +4,7 @@
 
 A small, dark, always-on-top Windows dictation switch. Click the switch or press **Ctrl+Alt+D**, click your text field, and speak. A green circle behind the microphone means listening; red means off. Listening has **no automatic timeout**. Turn it off yourself.
 
-Version **0.5.0** restores a simple direct-input workflow. No transcript panel, copy button, review-only mode, background field lock, rolling revisions or auto-stop selector remains. This deliberately supersedes the complex 0.3/0.4 interface. Earlier source and portable folders remain available for recovery.
+Version **0.5.1** restores a simple direct-input workflow. No transcript panel, copy button, review-only mode, background field lock, rolling revisions or auto-stop selector remains. This deliberately supersedes the complex 0.3/0.4 interface. Earlier source and portable folders remain available for recovery.
 
 ## Use
 
@@ -40,15 +40,15 @@ Requirements: Windows 11 x64, Docker Desktop with Linux containers, a microphone
 .\Start-Dictation.ps1
 ```
 
-Build-Portable creates portable/v0.5.0 and a Windows ZIP. Models and private configuration are excluded. Install-Shortcuts updates desktop and per-user Startup shortcuts. The signed-in-session watcher opens/closes the companion when both containers start/stop. Closing the companion stops capture; the desktop shortcut explicitly reopens it. The executable is unsigned.
+Build-Portable creates portable/v0.5.1 and a Windows ZIP. Models and private configuration are excluded. Install-Shortcuts updates the desktop launcher and removes the old resident Startup watcher. Exiting stops microphone capture, stops and verifies both dictation containers, and ends the app-lifetime helper. The desktop shortcut starts the services and opens the companion again. The executable is unsigned.
 
-The desktop has one **Local Whisper Dictation** shortcut using the same Tk feather icon as the application. Closing the window stops microphone capture, so a separate Stop shortcut is unnecessary. The speech containers remain available for later use and other local applications. Stop-Dictation.ps1 remains an optional way to shut down those backend services; shortcut installation removes only the older Stop link owned by this project.
+The desktop has one **Local Whisper Dictation** shortcut using the same Tk feather icon as the application. Closing the window stops microphone capture and both dictation speech services, so a separate Stop shortcut is unnecessary. Docker Desktop and unrelated containers are not stopped. Stop-Dictation.ps1 remains a recovery action; shortcut installation removes only the older Stop link owned by this project.
 
 Only microphone/model choices persist in LocalAppData/LocalWhisperDictation/settings.json. Listening state and transcripts are never saved there. Re-select the microphone if Windows device names/indexes change.
 
 ## Verification - November 12, 2026
 
-41 ordinary Windows checks passed, with one interactive test skipped by default. That real owned two-window test also passed separately: an actual mouse click on the toolbar preserved external focus; Unicode was inserted; a stale result was rejected after switching windows; and fresh text reached the second destination. The test opened no microphone and targeted no user app. Containerized Linux passed 23 checks and skipped 19 Windows/interactive checks. The portable Windows build passed. Hosted results are checked separately.
+53 ordinary Windows checks passed, with two opt-in desktop/lifecycle checks skipped by default. That real owned two-window test also passed separately: an actual mouse click on the toolbar preserved external focus; Unicode was inserted; a stale result was rejected after switching windows; and fresh text reached the second destination. The test opened no microphone and targeted no user app. Containerized Linux passed 29 checks and skipped 26 Windows/interactive checks. The portable Windows build passed. Hosted results are checked separately.
 
 Your microphone accuracy, actual intended-app acceptance, prolonged use, reboot/offline behavior and second-host recovery still need their own checks. Review dictated text in the destination before sending it.
 
@@ -57,3 +57,11 @@ Your microphone accuracy, actual intended-app acceptance, prolonged use, reboot/
 Only loopback ports 17863 and 18081 are published. Inference uses the fixed local Docker service without a cloud fallback. The application does not save speech recordings or transcript history. Internal clipboard transport replaces clipboard contents; there is no manual copy/paste workflow. Windows clipboard history/sync are separate system settings. Upstream Whisper logs can contain recognition text and should remain private.
 
 See [the operating guide](docs/README.md), [primary-source implementation review](docs/IMPLEMENTATION-REVIEW.md), [repository map](docs/REPOSITORIES.md) and [current handoff](HANDOFF.md). The [design reference library](docs/DESIGN-REFERENCE-LIBRARY.md) remains reference documentation, not an asset database. Never commit recordings, transcripts, secrets, weights, private databases or backups.
+
+## Exit ownership and v1.0 gate
+
+The latest direction requires no dictation-owned background processes after exit. Normal shutdown verifies both scoped containers are stopped; a process-handle supervisor covers abnormal owner termination and then exits. Only services with this project's Compose label and the allowlisted dictation/whisper service label are stopped. Other local AI containers and the shared Docker engine remain outside this app's ownership.
+
+The simplified interface needs no feature expansion for v1.0. Actual packaged normal/forced-exit cleanup and close/reopen checks passed. The remaining release gate is real microphone-to-intended-application acceptance after the earlier input regressions, including a continuous listening/off/on trial. Record those results before calling v1.0 ready. General OS failure, a stopped Docker daemon or a forcibly killed cleanup helper cannot be guaranteed away; cleanup failures are not reported as success.
+
+Packaged lifecycle acceptance uses DICTATION_LIFECYCLE_TEST=1 with unittest discover -s tests -p test_packaged_lifecycle.py. It starts the current package twice, opens no microphone, closes only its own window in the normal case and terminates only its own process in the forced case. Both cases verified no running dictation containers or project helper processes and preservation of unrelated container IDs. The inherited singleton guard and launcher wait also prevent a new owner from starting while prior cleanup is finishing. The installer removes the old resident Startup watcher; final installed state is closed with no dictation-owned services running.

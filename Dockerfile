@@ -4,6 +4,7 @@ COPY service.py ./
 COPY audio_segments.py ./
 COPY transcript_quality.py ./
 COPY preferences.py ./
+COPY lifecycle.py ./
 USER 65534:65534
 EXPOSE 8080
 CMD ["python", "-B", "service.py"]

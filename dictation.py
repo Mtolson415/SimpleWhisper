@@ -1,4 +1,12 @@
 """Windows microphone and desktop bridge. Run as the ordinary signed-in user."""
+import sys
+
+# The short-lived shutdown supervisor must not import audio/UI libraries or
+# create any windows while waiting for the owning companion to exit.
+if __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == '--supervise-handle':
+    from lifecycle import supervise_handle
+    raise SystemExit(supervise_handle(int(sys.argv[2])))
+
 import ctypes
 from collections import deque
 from ctypes import wintypes
@@ -6,7 +14,6 @@ import io
 import json
 import queue
 import subprocess
-import sys
 import threading
 import time
 import tkinter as tk
@@ -21,10 +28,11 @@ from windows_clipboard import set_clipboard_text
 from windows_input import paste_shortcut
 from windows_focus import Desktop
 import preferences
+from lifecycle import launch_supervisor, stop_services
 
 ENDPOINT = 'http://127.0.0.1:17863/transcribe'
 RATE = 16000
-VERSION = '0.5.0'
+VERSION = '0.5.1'
 
 
 def gateway_running():
@@ -50,38 +58,6 @@ def singleton(name):
     if not handle or ctypes.get_last_error() == 183:
         return None
     return handle  # Retain until process exit; Windows releases it automatically.
-
-
-def watch_containers():
-    guard = singleton('LocalWhisperDictationWatcher')
-    if not guard:
-        return
-    previously_running = False
-    failures = 0
-    while True:
-        running = gateway_running()
-        if running is None:
-            failures += 1
-            if failures >= 3:
-                previously_running = False
-            time.sleep(2)
-            continue
-        failures = 0
-        if running and not previously_running and gateway_ready():
-            command = [sys.executable] if getattr(sys, 'frozen', False) else [sys.executable, __file__]
-            subprocess.Popen(command, creationflags=subprocess.CREATE_NO_WINDOW)
-            previously_running = True
-        elif not running:
-            previously_running = False
-        time.sleep(2)
-
-
-def gateway_ready():
-    try:
-        with urllib.request.urlopen(ENDPOINT.rsplit('/', 1)[0] + '/health', timeout=2) as response:
-            return response.status == 200
-    except Exception:
-        return False
 
 
 def wav_bytes(pcm):
@@ -113,6 +89,8 @@ class App:
         self.stream = None
         self.session = 0
         self.listening = False
+        self.closing = False
+        self.shutdown_failed = False
         self.busy = True
         self.active_target = None
         self.note = 'Loading speech model…'
@@ -257,6 +235,8 @@ class App:
                   relief='flat', padx=20, pady=5).pack(anchor='e', padx=16, pady=(0, 14))
 
     def toggle(self):
+        if self.closing or self.shutdown_failed:
+            return
         if self.listening:
             self.stop()
             self.enqueue_audio(None, None)
@@ -368,6 +348,8 @@ class App:
         try:
             while True:
                 event, value = self.events.get_nowait()
+                if self.closing and event not in {'shutdown_done', 'shutdown_error'}:
+                    continue
                 if event == 'toggle':
                     self.toggle()
                 elif event == 'container_stopped':
@@ -385,16 +367,34 @@ class App:
                     self.deliver(*value)
                 elif event == 'warning':
                     self.note = value
+                elif event == 'shutdown_done':
+                    self.root.destroy()
+                    return
+                elif event == 'shutdown_error':
+                    self.closing = False
+                    self.shutdown_failed = True
+                    self.note = 'Could not stop services · close again to retry'
         except queue.Empty:
             pass
         self.draw()
         self.root.after(40, self.poll)
 
     def close(self):
-        self.stop()
+        if self.closing:
+            return
+        try:
+            self.stop()
+        except Exception:
+            self.listening = False
         self.session += 1
         self.pending.clear()
-        self.root.destroy()
+        self.closing = True
+        self.note = 'Stopping dictation services…'
+        self.draw()
+        threading.Thread(target=self.shutdown, daemon=True).start()
+
+    def shutdown(self):
+        self.events.put(('shutdown_done' if stop_services() else 'shutdown_error', None))
 
     def run(self):
         self.root.mainloop()
@@ -402,8 +402,13 @@ class App:
 
 if __name__ == '__main__':
     if '--watch' in sys.argv:
-        watch_containers()
+        raise SystemExit('Resident watcher retired. Use Start-Dictation.ps1.')
     else:
         guard = singleton('LocalWhisperDictationCompanion')
         if guard:
-            App().run()
+            try:
+                supervisor = launch_supervisor(guard)
+                App().run()
+            except BaseException:
+                stop_services()
+                raise

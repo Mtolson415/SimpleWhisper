@@ -149,3 +149,42 @@ class DesktopTests(unittest.TestCase):
         self.assertTrue(flags & 0x08000000)
         self.assertTrue(flags & 0x80)
         desktop.user.SetWindowPos.assert_called_once()
+
+    def shutdown_app(self):
+        app = self.app()
+        app.closing = False
+        app.shutdown_failed = False
+        app.stop = Mock()
+        app.draw = Mock()
+        app.root = Mock()
+        app.events = queue.Queue()
+        return app
+
+    def test_exit_stops_capture_and_waits_for_cleanup_before_destroy(self):
+        app = self.shutdown_app()
+        with patch('dictation.threading.Thread') as thread:
+            app.close()
+            app.close()
+        app.stop.assert_called_once_with()
+        thread.assert_called_once()
+        self.assertTrue(app.closing)
+        self.assertEqual(app.session, 2)
+        app.root.destroy.assert_not_called()
+        with patch('dictation.stop_services', return_value=True):
+            app.shutdown()
+        app.poll()
+        app.root.destroy.assert_called_once_with()
+
+    def test_failed_cleanup_remains_visible_and_can_be_retried(self):
+        app = self.shutdown_app()
+        app.closing = True
+        with patch('dictation.stop_services', return_value=False):
+            app.shutdown()
+        app.poll()
+        self.assertFalse(app.closing)
+        self.assertTrue(app.shutdown_failed)
+        app.root.destroy.assert_not_called()
+        self.assertIn('retry', app.note)
+        with patch('dictation.threading.Thread') as thread:
+            app.close()
+        thread.assert_called_once()

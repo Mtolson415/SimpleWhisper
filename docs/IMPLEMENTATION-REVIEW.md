@@ -19,3 +19,9 @@ The user requested checking research and code examples before finishing the simp
 - Tested a real mouse click without programmatically activating the toolbar first, which would invalidate the non-activation check.
 
 The owned two-window desktop test passed toggle-click focus preservation, Unicode insertion, a destination switch, stale-result rejection and fresh insertion. That is evidence for those scenarios, not every application, exact identity of browser fields sharing a native window, microphone quality or uninterrupted hardware uptime. Python copy/queue operations are a practical implementation rather than a hard-real-time guarantee.
+
+## Lifetime ownership follow-up
+
+[Docker stop](https://docs.docker.com/reference/cli/docker/container/stop/) defines the grace period and eventual termination of selected container processes. Shutdown selects only the project label plus the dictation/whisper service allowlist and verifies the result. It never stops the shared Docker engine or unrelated projects.
+
+The abnormal-exit helper follows Microsoft's [OpenProcess](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess) and [WaitForSingleObject](https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-waitforsingleobject) model. It receives an inherited wait-only process handle, avoiding PID-reuse races; it creates no UI/audio stream and exits after scoped cleanup. No resident watcher remains.
