@@ -42,6 +42,8 @@ Requirements: Windows 11 x64, Docker Desktop with Linux containers, a microphone
 
 Build-Portable creates portable/v0.5.0 and a Windows ZIP. Models and private configuration are excluded. Install-Shortcuts updates desktop and per-user Startup shortcuts. The signed-in-session watcher opens/closes the companion when both containers start/stop. Closing the companion stops capture; the desktop shortcut explicitly reopens it. The executable is unsigned.
 
+The desktop has one **Local Whisper Dictation** shortcut using the same Tk feather icon as the application. Closing the window stops microphone capture, so a separate Stop shortcut is unnecessary. The speech containers remain available for later use and other local applications. Stop-Dictation.ps1 remains an optional way to shut down those backend services; shortcut installation removes only the older Stop link owned by this project.
+
 Only microphone/model choices persist in LocalAppData/LocalWhisperDictation/settings.json. Listening state and transcripts are never saved there. Re-select the microphone if Windows device names/indexes change.
 
 ## Verification - November 12, 2026

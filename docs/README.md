@@ -25,9 +25,11 @@ Base supports English/Spanish and is the fast default. Base.en is English only. 
 
 ## Packaging, preferences and recovery
 
-Build-Portable.ps1 builds portable/v0.5.0 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts updates desktop Start/Stop and the user Startup watcher. After moving the portable folder, update .env and rerun shortcut installation.
+Build-Portable.ps1 builds portable/v0.5.0 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher and updates the user Startup watcher, both using the existing Tk feather resource from the bundled Tk DLL. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
 
 The Windows watcher is required because a container cannot open a user's desktop app directly. Confirmed container stops close the companion. Three consecutive unknown Docker-status results also close it; isolated failures do not. Closing the companion stops capture. Start-Dictation explicitly reopens it. Nothing in this UI rollback deletes containers, model weights or configuration.
+
+No separate desktop Stop shortcut is needed for normal use: close the app to stop listening. Containers remain running for reuse by this or other local tools. Stop-Dictation.ps1 is retained for optional backend shutdown. The shortcut icon reuses the existing feather resource rather than introducing a different microphone logo or a new image dependency.
 
 LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model choices. The listener always starts off. Removing that preferences file resets those choices; do not delete model files or private .env to reset the UI. Earlier source/portable versions remain recovery history, not the default launcher.
 

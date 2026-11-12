@@ -15,3 +15,5 @@ The primary-source review is docs/IMPLEMENTATION-REVIEW.md. It led to a window-s
 Microphone quality, actual intended-app acceptance, prolonged hardware stability, reboot/offline and second-host recovery remain unverified. Do not describe synthetic transport checks as universal dictation acceptance.
 
 Public/private ownership remains docs/REPOSITORIES.md. The launcher should resolve portable/v0.5.0. Earlier source/portable versions remain recovery history. Never commit local settings, recordings, transcripts, raw conversations, credentials, weights or backups. Pull shared guidance before subsequent work.
+
+Desktop shortcut follow-up: the user explicitly selected the same existing feather icon. The launcher and Startup watcher reuse icon index 0 from the bundled Tk DLL. Normal desktop use has one launcher; closing the app stops capture. The older project-owned Stop desktop link is removed, while Stop-Dictation.ps1 remains available for optional backend shutdown. No listener behavior or speech/model configuration changed in this follow-up.
