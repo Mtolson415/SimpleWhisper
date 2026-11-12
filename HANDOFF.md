@@ -1,5 +1,9 @@
 # Current handoff - November 12, 2026
 
+## Startup investigation - November 12, 2026
+
+Reported failure to open was not reproduced on the checked restart. Initially neither companion nor speech service was running. The installed launcher started both services, waited roughly 30 seconds for readiness, then opened a responding Whisper Dictation 0.5.1 window with its lifetime supervisor. Gateway health/models endpoints responded successfully. No microphone was opened and actual dictation remains unverified. The hidden launcher console makes preparation appear inactive; the operating guide now explains the wait and visible-console diagnostic. No runtime change was made. Supabase listed no accessible projects in the selected connection; this app has no Supabase dependency.
+
 ## 0.5.1 - simplified direct dictation
 
 The latest user request supersedes the 0.3/0.4 direction: remove the app transcript/copy workflow, rolling revisions and background lock; provide a small dark always-on-top listener with one toggle, a green/red microphone indicator, a settings menu and no listening timeout.

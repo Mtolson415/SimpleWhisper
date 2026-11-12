@@ -35,6 +35,8 @@ LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model ch
 
 ## Troubleshooting
 
+The desktop launcher prepares Docker and waits for both speech services before opening the window. A checked restart took about 30 seconds; allow startup to finish. If no window appears, run `Start-Dictation.ps1` from PowerShell in the project folder to see startup errors (the desktop shortcut hides that console). This application uses local Docker inference and has no Supabase dependency.
+
 | Symptom | Check |
 |---|---|
 | No text in the destination | Verify green listening, the correct microphone and loaded model. Click the intended external field and read the short status message. |

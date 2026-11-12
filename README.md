@@ -8,6 +8,8 @@ Version **0.5.1** restores a simple direct-input workflow. No transcript panel, 
 
 ## Use
 
+Startup recovery checked November 12: the installed launcher opened a responding window after about 30 seconds of speech-service preparation. See the operating guide for diagnosing a shortcut that appears inactive. This is a local Docker application with no Supabase dependency.
+
 1. Open **Local Whisper Dictation** using the desktop shortcut. Docker Desktop and the speech containers must be running.
 2. With listening off, use the gear menu to select your microphone and model. **Base** is the fast English/Spanish default; **Base.en** is English only; **Turbo** is a slower multilingual comparison.
 3. Click an external text field and switch listening on. Ordinary clicks on the floating switch are designed to leave the external caret in place.
