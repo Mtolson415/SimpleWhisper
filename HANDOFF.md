@@ -1,5 +1,11 @@
 # Current handoff - November 12, 2026
 
+## SimpleWhisper 0.5.2
+
+User-requested appearance/control update: renamed the application and desktop launcher to SimpleWhisper, matching dark toolbar/settings title bars and readable dark readonly/disabled comboboxes/popups. Microphone click controls listening; the former listening slider independently controls always on top. Settings records Ctrl/Alt plus letters, digits or F1–F12 (optional Shift), saves successful registrations, and preserves the active binding on conflict. Activation is suspended while Settings is open. Existing speech behavior, privacy boundaries and preference location are retained. The user previously reported the app working and complete; this is their subsequent requested revision.
+
+Validation: 56 ordinary Windows checks passed (two opt-in checks skipped); the real owned two-window acceptance also passed with the microphone hit target, preserving external focus and Unicode insertion without opening a microphone. Visual preview verified dark title bars/fields/dropdown list, shortcut capture and independent pin-toggle rendering. Conflict-preservation and shortcut round-trip checks passed. The renamed portable SimpleWhisper.exe passed normal/forced-exit and reopen acceptance: both owned services/helpers stopped and unrelated containers were preserved. The desktop installer replaces only the owned old launcher with SimpleWhisper.lnk, retaining the feather icon. Final installed state is open with listening off. Hosted checks must be verified for this milestone.
+
 ## Startup investigation - November 12, 2026
 
 Reported failure to open was not reproduced on the checked restart. Initially neither companion nor speech service was running. The installed launcher started both services, waited roughly 30 seconds for readiness, then opened a responding Whisper Dictation 0.5.1 window with its lifetime supervisor. Gateway health/models endpoints responded successfully. No microphone was opened and actual dictation remains unverified. The hidden launcher console makes preparation appear inactive; the operating guide now explains the wait and visible-console diagnostic. No runtime change was made. Supabase listed no accessible projects in the selected connection; this app has no Supabase dependency.

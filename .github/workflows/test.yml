@@ -35,6 +35,6 @@ jobs:
           .\Build-Portable.ps1
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: LocalWhisperDictation-Windows-x64
-          path: LocalWhisperDictation-Windows-x64.zip
+          name: SimpleWhisper-Windows-x64
+          path: SimpleWhisper-Windows-x64.zip
           retention-days: 14

@@ -32,7 +32,7 @@ from lifecycle import launch_supervisor, stop_services
 
 ENDPOINT = 'http://127.0.0.1:17863/transcribe'
 RATE = 16000
-VERSION = '0.5.1'
+VERSION = '0.5.2'
 
 
 def gateway_running():
@@ -77,11 +77,13 @@ class App:
         self.user = self.desktop.user
         self.root = tk.Tk()
         self.root.withdraw()
-        self.root.title('Whisper Dictation ' + VERSION)
+        self.root.title('SimpleWhisper')
         self.root.configure(bg='#171b23')
         self.root.geometry('310x96')
         self.root.resizable(False, False)
         self.root.attributes('-topmost', True)
+        self.always_on_top = True
+        self.hotkey_updates = queue.Queue()
         self.events = queue.Queue()
         self.jobs = queue.Queue(maxsize=4)
         self.audio_frames = queue.Queue(maxsize=128)
@@ -95,6 +97,8 @@ class App:
         self.active_target = None
         self.note = 'Loading speech model…'
         self.saved = preferences.load()
+        self.shortcut = self.saved.get('shortcut', preferences.DEFAULT_SHORTCUT)
+        self.hotkey_updates.put(self.shortcut)
         self.devices = [None]
         self.device_names = ['Windows default microphone']
         for index, device in enumerate(sd.query_devices()):
@@ -113,7 +117,7 @@ class App:
         self.canvas.bind('<Button-1>', self.click)
         self.menu = tk.Menu(self.root, tearoff=False, bg='#232936', fg='#eef2f8',
                             activebackground='#354052', activeforeground='white')
-        self.menu.add_command(label='Microphone and speech model…', command=self.open_settings)
+        self.menu.add_command(label='Settings…', command=self.open_settings)
         self.menu.add_separator()
         self.menu.add_command(label='Quit', command=self.close)
         self.root.protocol('WM_DELETE_WINDOW', self.close)
@@ -129,7 +133,7 @@ class App:
         self.root.after(40, self.poll)
 
     def draw(self):
-        state = (self.listening, self.note)
+        state = (self.listening, self.note, self.always_on_top, self.shortcut)
         if getattr(self, '_drawn', None) == state:
             return
         self._drawn = state
@@ -144,31 +148,55 @@ class App:
         c.create_line(30, 52, 42, 52, fill='white', width=2)
         c.create_text(72, 27, anchor='w', text='Listening' if self.listening else 'Off',
                       fill='#f2f5fa', font=('Segoe UI', 13, 'bold'))
-        c.create_text(72, 49, anchor='w', text='Ctrl+Alt+D', fill='#a6b1c1', font=('Segoe UI', 9))
-        c.create_oval(206, 24, 242, 48, fill=color if self.listening else '#3b4352', outline='')
-        c.create_oval(218 if self.listening else 208, 26,
-                      240 if self.listening else 230, 46, fill='white', outline='')
+        c.create_text(72, 49, anchor='w', text=self.shortcut, fill='#c5cfdd', font=('Segoe UI', 9))
+        c.create_oval(206, 24, 242, 48, fill='#20a779' if self.always_on_top else '#3b4352', outline='')
+        c.create_oval(218 if self.always_on_top else 208, 26,
+                      240 if self.always_on_top else 230, 46, fill='white', outline='')
+        c.create_text(224, 11, text='On top', fill='#c5cfdd', font=('Segoe UI', 8))
         c.create_text(278, 36, text='⚙', fill='#c8d2df', font=('Segoe UI Symbol', 19))
         c.create_text(13, 79, text=self.note[:49], anchor='w', fill='#a6b1c1', font=('Segoe UI', 9))
 
     def click(self, event):
         if event.x >= 259 and event.y < 65:
             self.menu.tk_popup(self.root.winfo_rootx() + 140, self.root.winfo_rooty() + 60)
-        else:
+        elif 198 <= event.x <= 250 and 20 <= event.y <= 57:
+            self.always_on_top = not self.always_on_top
+            self.root.attributes('-topmost', self.always_on_top)
+            self.draw()
+        elif 10 <= event.x <= 62 and 10 <= event.y <= 64:
             self.toggle()
 
     def hotkeys(self):
         self.user.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
-        if not self.user.RegisterHotKey(None, 1, 0x4000 | 0x2 | 0x1, ord('D')):
-            self.events.put(('warning', 'Ctrl+Alt+D is in use; use the toggle.'))
-            return
+        self.user.PeekMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND,
+                                         wintypes.UINT, wintypes.UINT, wintypes.UINT]
+        current = None
         msg = wintypes.MSG()
         try:
-            while self.user.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-                if msg.message == 0x0312:
-                    self.events.put(('toggle', None))
+            while True:
+                try:
+                    requested = self.hotkey_updates.get_nowait()
+                except queue.Empty:
+                    requested = None
+                if requested is not None and requested != current:
+                    modifiers, key = preferences.shortcut_parts(requested)
+                    # Register a second ID first so a conflict preserves the old binding.
+                    new_id = 2 if getattr(self, '_hotkey_id', 1) == 1 else 1
+                    if self.user.RegisterHotKey(None, new_id, 0x4000 | modifiers, key):
+                        if current is not None:
+                            self.user.UnregisterHotKey(None, self._hotkey_id)
+                        self._hotkey_id = new_id
+                        current = requested
+                        self.events.put(('shortcut_set', requested))
+                    else:
+                        self.events.put(('shortcut_error', requested + ' unavailable · choose another'))
+                while self.user.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):
+                    if msg.message == 0x0312 and msg.wParam == getattr(self, '_hotkey_id', 0):
+                        self.events.put(('toggle', None))
+                time.sleep(0.03)
         finally:
-            self.user.UnregisterHotKey(None, 1)
+            if current is not None:
+                self.user.UnregisterHotKey(None, self._hotkey_id)
 
     def monitor_container(self):
         failures = 0
@@ -194,13 +222,24 @@ class App:
             self.settings_window.lift()
             return
         window = self.settings_window = tk.Toplevel(self.root)
-        window.title('Dictation settings')
+        window.title('SimpleWhisper settings')
         window.configure(bg='#171b23')
         window.attributes('-topmost', True)
         window.resizable(False, False)
         style = ttk.Style(window)
         style.theme_use('clam')
-        style.configure('Dark.TCombobox', fieldbackground='#252c39', background='#333d4c', foreground='#f2f5fa')
+        style.configure('Dark.TCombobox', fieldbackground='#252c39', background='#333d4c',
+                        foreground='#f2f5fa', arrowcolor='#f2f5fa', bordercolor='#536176', padding=5)
+        style.map('Dark.TCombobox',
+                  fieldbackground=[('disabled', '#252c39'), ('readonly', '#252c39')],
+                  foreground=[('disabled', '#a6b1c1'), ('readonly', '#f2f5fa')],
+                  selectbackground=[('readonly', '#35465c')],
+                  selectforeground=[('readonly', '#ffffff')],
+                  background=[('active', '#42516a'), ('readonly', '#333d4c')])
+        window.option_add('*TCombobox*Listbox.background', '#252c39')
+        window.option_add('*TCombobox*Listbox.foreground', '#f2f5fa')
+        window.option_add('*TCombobox*Listbox.selectBackground', '#42516a')
+        window.option_add('*TCombobox*Listbox.selectForeground', '#ffffff')
         tk.Label(window, text='Microphone', bg='#171b23', fg='#eef2f8').pack(anchor='w', padx=16, pady=(14, 4))
         mic = ttk.Combobox(window, values=self.device_names, state='disabled' if self.listening else 'readonly',
                            width=48, style='Dark.TCombobox')
@@ -212,6 +251,28 @@ class App:
                              width=48, style='Dark.TCombobox')
         model.set(next((m['label'] for m in self.models if m['id'] == self.model), self.model))
         model.pack(padx=16)
+        tk.Label(window, text='Activation shortcut', bg='#171b23', fg='#eef2f8').pack(
+            anchor='w', padx=16, pady=(12, 4))
+        shortcut = tk.StringVar(value=self.shortcut)
+        binding = tk.Entry(window, textvariable=shortcut, state='readonly', readonlybackground='#252c39',
+                           fg='#f2f5fa', insertbackground='white', relief='flat', font=('Segoe UI', 10))
+        binding.pack(fill='x', padx=16, ipady=6)
+        binding.bind('<Button-1>', lambda event: binding.focus_set())
+        def capture(event):
+            if self.listening:
+                return 'break'
+            key = event.keysym.upper()
+            if key in {'CONTROL_L', 'CONTROL_R', 'ALT_L', 'ALT_R', 'SHIFT_L', 'SHIFT_R'}:
+                return 'break'
+            modifiers = [name for name, mask in [('Ctrl', 0x4), ('Alt', 0x20000), ('Shift', 0x1)]
+                         if event.state & mask]
+            value = '+'.join(modifiers + [key])
+            if preferences.valid_shortcut(value):
+                shortcut.set(value)
+            return 'break'
+        binding.bind('<KeyPress>', capture)
+        tk.Label(window, text='Click the shortcut field, then press Ctrl or Alt + a key.',
+                 bg='#171b23', fg='#c5cfdd').pack(anchor='w', padx=16, pady=(4, 0))
         tk.Label(window, text='Turn listening off before changing these settings.' if self.listening else
                  'Listening continues until you turn it off. No automatic timeout.',
                  bg='#171b23', fg='#a6b1c1').pack(padx=16, pady=12)
@@ -220,11 +281,13 @@ class App:
             index = model.current()
             chosen = self.models[index]['id'] if 0 <= index < len(self.models) else self.model
             try:
-                preferences.save(self.microphone, chosen)
+                preferences.save(self.microphone, chosen, shortcut=self.shortcut)
             except OSError:
                 self.note = 'Settings could not be saved.'
             window.destroy()
             self.settings_window = None
+            if shortcut.get() != self.shortcut:
+                self.hotkey_updates.put(shortcut.get())
             if chosen != self.model:
                 self.busy = True
                 self.note = 'Loading speech model…'
@@ -233,6 +296,8 @@ class App:
         tk.Button(window, text='Save', command=apply, state='disabled' if self.listening or self.busy else 'normal',
                   bg='#303b4b', fg='white', activebackground='#42516a', activeforeground='white',
                   relief='flat', padx=20, pady=5).pack(anchor='e', padx=16, pady=(0, 14))
+        window.update_idletasks()
+        self.desktop.dark_title(window)
 
     def toggle(self):
         if self.closing or self.shutdown_failed:
@@ -240,7 +305,7 @@ class App:
         if self.listening:
             self.stop()
             self.enqueue_audio(None, None)
-            self.note = 'Off · click the switch to listen'
+            self.note = 'Off · click the microphone to listen'
             self.draw()
             return
         if self.busy:
@@ -351,7 +416,9 @@ class App:
                 if self.closing and event not in {'shutdown_done', 'shutdown_error'}:
                     continue
                 if event == 'toggle':
-                    self.toggle()
+                    # Recording a shortcut in Settings must never start capture.
+                    if not (self.settings_window and self.settings_window.winfo_exists()):
+                        self.toggle()
                 elif event == 'container_stopped':
                     self.close()
                     return
@@ -359,7 +426,15 @@ class App:
                     self.models = value['models']
                     self.model = value['active']
                     self.busy = False
-                    self.note = 'Off · click the switch to listen'
+                    self.note = 'Off · click the microphone to listen'
+                elif event == 'shortcut_set':
+                    self.shortcut = value
+                    try:
+                        preferences.save(self.microphone, preferences.load().get('model', self.model), shortcut=value)
+                    except OSError:
+                        self.note = 'Shortcut active · could not save setting'
+                elif event == 'shortcut_error':
+                    self.note = value
                 elif event == 'model_error':
                     self.busy = False
                     self.note = value

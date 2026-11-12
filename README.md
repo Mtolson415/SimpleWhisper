@@ -1,16 +1,18 @@
-# Local Whisper Dictation
+# SimpleWhisper
 
 [![Tests](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml/badge.svg)](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml)
 
-A small, dark, always-on-top Windows dictation switch. Click the switch or press **Ctrl+Alt+D**, click your text field, and speak. A green circle behind the microphone means listening; red means off. Listening has **no automatic timeout**. Turn it off yourself.
+A small, dark, always-on-top Windows dictation switch. Click the microphone or press your activation shortcut (default **Ctrl+Alt+D**), click your text field, and speak. A green circle behind the microphone means listening; red means off. Listening has **no automatic timeout**. Turn it off yourself.
 
-Version **0.5.1** restores a simple direct-input workflow. No transcript panel, copy button, review-only mode, background field lock, rolling revisions or auto-stop selector remains. This deliberately supersedes the complex 0.3/0.4 interface. Earlier source and portable folders remain available for recovery.
+Version **0.5.2** restores a simple direct-input workflow. No transcript panel, copy button, review-only mode, background field lock, rolling revisions or auto-stop selector remains. This deliberately supersedes the complex 0.3/0.4 interface. Earlier source and portable folders remain available for recovery.
 
 ## Use
 
+The microphone starts/stops listening. The separate **On top** toggle controls whether the toolbar stays above other windows. Settings includes a shortcut field: click it, press Ctrl or Alt with a letter, number or F1–F12 (Shift optional), then Save. An unavailable shortcut keeps the previous binding. Shortcuts are suspended while Settings is open. The toolbar, title bars, dropdown fields and dropdown lists use a matching dark theme.
+
 Startup recovery checked November 12: the installed launcher opened a responding window after about 30 seconds of speech-service preparation. See the operating guide for diagnosing a shortcut that appears inactive. This is a local Docker application with no Supabase dependency.
 
-1. Open **Local Whisper Dictation** using the desktop shortcut. Docker Desktop and the speech containers must be running.
+1. Open **SimpleWhisper** using the desktop shortcut. Docker Desktop and the speech containers must be running.
 2. With listening off, use the gear menu to select your microphone and model. **Base** is the fast English/Spanish default; **Base.en** is English only; **Turbo** is a slower multilingual comparison.
 3. Click an external text field and switch listening on. Ordinary clicks on the floating switch are designed to leave the external caret in place.
 4. Speak and pause briefly. Final phrases go directly into the active external field. No Enter is sent and no form is submitted.
@@ -42,11 +44,11 @@ Requirements: Windows 11 x64, Docker Desktop with Linux containers, a microphone
 .\Start-Dictation.ps1
 ```
 
-Build-Portable creates portable/v0.5.1 and a Windows ZIP. Models and private configuration are excluded. Install-Shortcuts updates the desktop launcher and removes the old resident Startup watcher. Exiting stops microphone capture, stops and verifies both dictation containers, and ends the app-lifetime helper. The desktop shortcut starts the services and opens the companion again. The executable is unsigned.
+Build-Portable creates portable/v0.5.2 and a Windows ZIP. Models and private configuration are excluded. Install-Shortcuts updates the desktop launcher and removes the old resident Startup watcher. Exiting stops microphone capture, stops and verifies both dictation containers, and ends the app-lifetime helper. The desktop shortcut starts the services and opens the companion again. The executable is unsigned.
 
-The desktop has one **Local Whisper Dictation** shortcut using the same Tk feather icon as the application. Closing the window stops microphone capture and both dictation speech services, so a separate Stop shortcut is unnecessary. Docker Desktop and unrelated containers are not stopped. Stop-Dictation.ps1 remains a recovery action; shortcut installation removes only the older Stop link owned by this project.
+The desktop has one **SimpleWhisper** shortcut using the same Tk feather icon as the application. Closing the window stops microphone capture and both dictation speech services, so a separate Stop shortcut is unnecessary. Docker Desktop and unrelated containers are not stopped. Stop-Dictation.ps1 remains a recovery action; shortcut installation removes only the older Stop link owned by this project.
 
-Only microphone/model choices persist in LocalAppData/LocalWhisperDictation/settings.json. Listening state and transcripts are never saved there. Re-select the microphone if Windows device names/indexes change.
+Only microphone/model/activation-shortcut choices persist in LocalAppData/LocalWhisperDictation/settings.json. Listening state and transcripts are never saved there. Re-select the microphone if Windows device names/indexes change.
 
 ## Verification - November 12, 2026
 

@@ -6,7 +6,7 @@ if (!$portableExe -and !(Test-Path '.venv\Scripts\pythonw.exe')) {
     throw 'Extract the portable companion or run Setup.ps1 first.'
 }
 if ($portableExe) {
-    $dictationOwned = @(Get-CimInstance Win32_Process -Filter "Name='LocalWhisperDictation.exe'" | Where-Object { $_.ExecutablePath -eq $portableExe })
+    $dictationOwned = @(Get-CimInstance Win32_Process -Filter "Name='SimpleWhisper.exe'" | Where-Object { $_.ExecutablePath -eq $portableExe })
     if ($dictationOwned | Where-Object { $_.CommandLine -notmatch '--supervise-handle|--watch' }) {
         return # Already open; do not start another owner or restart its services.
     }

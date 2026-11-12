@@ -8,7 +8,7 @@ if (!$portableExe) { throw 'Build or extract the portable companion first.' }
 $tkIconLibrary = Get-ChildItem -LiteralPath (Join-Path (Split-Path $portableExe) '_internal') -Filter '*tk*.dll' | Select-Object -First 1
 if (!$tkIconLibrary) { throw 'The companion Tk feather icon library is missing.' }
 $featherIcon = $tkIconLibrary.FullName + ',0'
-$shortcut = $shortcutShell.CreateShortcut((Join-Path $desktopFolder 'Local Whisper Dictation.lnk'))
+$shortcut = $shortcutShell.CreateShortcut((Join-Path $desktopFolder 'SimpleWhisper.lnk'))
 $shortcut.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 $shortcut.Arguments = '-NoProfile -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'Start-Dictation.ps1') + '"'
 $shortcut.WorkingDirectory = $PSScriptRoot
@@ -36,7 +36,16 @@ if (Test-Path -LiteralPath $watcherShortcutPath) {
         Remove-Item -LiteralPath $watcherShortcutPath
     }
 }
-Get-CimInstance Win32_Process -Filter "Name='LocalWhisperDictation.exe'" | Where-Object {
+Get-CimInstance Win32_Process -Filter "Name='SimpleWhisper.exe' OR Name='LocalWhisperDictation.exe'" | Where-Object {
     $_.ExecutablePath -and $_.ExecutablePath.StartsWith($workspacePrefix, [StringComparison]::OrdinalIgnoreCase) -and
     $_.CommandLine -match '--watch'
 } | ForEach-Object { Stop-Process -Id $_.ProcessId }
+
+# Retire only a previous launcher owned by this project.
+$oldLauncher = Join-Path $desktopFolder 'Local Whisper Dictation.lnk'
+if (Test-Path -LiteralPath $oldLauncher) {
+    $oldLink = $shortcutShell.CreateShortcut($oldLauncher)
+    if ($oldLink.Arguments.Contains((Join-Path $PSScriptRoot 'Start-Dictation.ps1'))) {
+        Remove-Item -LiteralPath $oldLauncher
+    }
+}

@@ -55,11 +55,19 @@ class Desktop:
         style = self.get_style(window, -20) | 0x08000000 | 0x00000080
         self.set_style(window, -20, style)
         self.user.SetWindowPos(window, wintypes.HWND(-1), 0, 0, 0, 0, 0x33)
+        self.dark_title(widget)
+        return window
+
+    def dark_title(self, widget):
+        window = self.user.GetAncestor(widget.winfo_id(), 2)
         try:
             dark = wintypes.BOOL(True)
             dwm = ctypes.WinDLL('dwmapi')
             dwm.DwmSetWindowAttribute.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD]
             dwm.DwmSetWindowAttribute(window, 20, ctypes.byref(dark), ctypes.sizeof(dark))
+            # Explicit caption/text colors also keep an inactive toolbar legible.
+            for attribute, color in ((35, 0x231b17), (36, 0xfaf5f2)):
+                value = wintypes.DWORD(color)
+                dwm.DwmSetWindowAttribute(window, attribute, ctypes.byref(value), ctypes.sizeof(value))
         except OSError:
             pass
-        return window

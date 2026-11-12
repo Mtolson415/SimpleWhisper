@@ -20,13 +20,13 @@ class PackagedLifecycleTests(unittest.TestCase):
     def test_normal_and_forced_exit_leave_no_owned_services_or_helpers(self):
         from lifecycle import running_services, stop_services
         root = Path(__file__).resolve().parents[1]
-        executable = root / 'portable/v0.5.1/LocalWhisperDictation/LocalWhisperDictation.exe'
+        executable = root / 'portable/v0.5.2/SimpleWhisper/SimpleWhisper.exe'
         self.assertTrue(executable.is_file(), 'Build the current portable version first')
         powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
 
         def processes():
             result = subprocess.run([str(powershell), '-NoProfile', '-Command',
-                "Get-CimInstance Win32_Process -Filter \"Name='LocalWhisperDictation.exe'\" | "
+                "Get-CimInstance Win32_Process -Filter \"Name='SimpleWhisper.exe'\" | "
                 'Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress'],
                 capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode:
@@ -65,7 +65,7 @@ class PackagedLifecycleTests(unittest.TestCase):
                 if owner.value == pid and user.IsWindowVisible(hwnd):
                     title = ctypes.create_unicode_buffer(160)
                     user.GetWindowTextW(hwnd, title, 160)
-                    if title.value == 'Whisper Dictation 0.5.1':
+                    if title.value == 'SimpleWhisper':
                         found.append(hwnd)
                 return True
             user.EnumWindows(visit, 0)

@@ -12,6 +12,40 @@ if sys.platform == 'win32':
 
 @unittest.skipUnless(sys.platform == 'win32', 'Windows companion')
 class DesktopTests(unittest.TestCase):
+    def test_microphone_and_pin_have_separate_hit_targets(self):
+        from types import SimpleNamespace
+        app = App.__new__(App)
+        app.root = Mock()
+        app.menu = Mock()
+        app.toggle = Mock()
+        app.draw = Mock()
+        app.always_on_top = True
+        app.click(SimpleNamespace(x=224, y=36))
+        self.assertFalse(app.always_on_top)
+        app.root.attributes.assert_called_once_with('-topmost', False)
+        app.toggle.assert_not_called()
+        app.click(SimpleNamespace(x=36, y=36))
+        app.toggle.assert_called_once_with()
+        app.click(SimpleNamespace(x=100, y=80))
+        app.toggle.assert_called_once_with()
+
+    def test_shortcut_conflict_preserves_registered_binding(self):
+        app = App.__new__(App)
+        app.user = Mock()
+        app.user.RegisterHotKey.side_effect = [True, False]
+        app.user.PeekMessageW.return_value = False
+        app.hotkey_updates = queue.Queue()
+        app.hotkey_updates.put('Ctrl+Alt+D')
+        app.hotkey_updates.put('Ctrl+Shift+F8')
+        app.events = queue.Queue()
+        with patch('dictation.time.sleep', side_effect=[None, SystemExit]):
+            with self.assertRaises(SystemExit):
+                app.hotkeys()
+        self.assertEqual(app.events.get(), ('shortcut_set', 'Ctrl+Alt+D'))
+        self.assertEqual(app.events.get()[0], 'shortcut_error')
+        # No unregister on conflict: only the final cleanup releases the old ID.
+        app.user.UnregisterHotKey.assert_called_once_with(None, 2)
+
     def setUp(self):
         self.clip_patch = patch('dictation.set_clipboard_text')
         self.clip = self.clip_patch.start()

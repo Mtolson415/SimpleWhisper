@@ -61,7 +61,7 @@ class ScratchFieldAcceptance(unittest.TestCase):
                     target = current
                     # Actual mouse input into this test's own nonactivating toolbar.
                     # Unlike app-targeted automation, this does not preactivate it.
-                    app.user.SetCursorPos(app.root.winfo_rootx() + 220, app.root.winfo_rooty() + 37)
+                    app.user.SetCursorPos(app.root.winfo_rootx() + 36, app.root.winfo_rooty() + 37)
                     app.user.mouse_event(2, 0, 0, 0, 0)
                     app.user.mouse_event(4, 0, 0, 0, 0)
                     for _ in range(10):

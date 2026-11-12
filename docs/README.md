@@ -1,6 +1,10 @@
-# Operating and learning guide - 0.5.1
+# Operating and learning guide - 0.5.2
 
 ## Current choices
+
+SimpleWhisper 0.5.2 uses the microphone as its listening button and the separate On top toggle for window pinning (on by default each launch). Both title bars and all settings/dropdown states use dark colors with light text. The desktop shortcut is now SimpleWhisper and keeps the feather icon. Internal service/repository and existing preference-folder names remain compatible.
+
+In Settings, click Activation shortcut and press Ctrl or Alt plus A–Z, 0–9 or F1–F12; Shift is optional. Save registers the combination and persists it only on success. A conflict preserves the previous shortcut and displays an error. Global activation is suspended while Settings is open, so recording a binding cannot start the microphone. Microphone/model/shortcut preferences persist; the listening state does not.
 
 The requested rollback removes the transcript-panel workflow and revision/background-lock machinery. The app is a dark always-on-top listening switch with a green/red microphone circle and a gear menu. It starts off and listens until explicitly turned off, without an automatic session timeout. Microphone and model choices are the only settings.
 
@@ -40,7 +44,7 @@ The desktop launcher prepares Docker and waits for both speech services before o
 | Symptom | Check |
 |---|---|
 | No text in the destination | Verify green listening, the correct microphone and loaded model. Click the intended external field and read the short status message. |
-| Old transcript-panel interface appears | Close older companions and launch the current desktop shortcut; the current title is Whisper Dictation 0.5.1. |
+| Old transcript-panel interface appears | Close older companions and launch the current desktop shortcut; the current title is SimpleWhisper. |
 | Destination changed | That delayed phrase was discarded. Keep focus steady for a phrase; new speech is allowed immediately. |
 | Microphone unavailable | Turn listening off, select the intended device in settings, save and retry. Windows privacy settings are not changed. |
 | Model/recognition unavailable | Check both Docker containers and the external model mount. Health alone does not prove model availability. |
