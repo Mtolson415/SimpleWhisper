@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible SimpleWhisper problem
+body:
+  - type: markdown
+    attributes:
+      value: Use synthetic examples. Do not include recordings, dictated text, private paths or logs containing personal data. Use SECURITY.md for vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: App version, Windows version and Docker version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, model and destination app
+      description: Include enough sanitized detail to reproduce the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true

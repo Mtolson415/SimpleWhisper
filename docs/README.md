@@ -4,9 +4,9 @@
 
 SimpleWhisper 0.5.2 uses the microphone as its listening button and the separate On top toggle for window pinning (on by default each launch). Both title bars and all settings/dropdown states use dark colors with light text. The desktop shortcut is now SimpleWhisper and keeps the feather icon. Internal service/repository and existing preference-folder names remain compatible.
 
-In Settings, click Activation shortcut and press Ctrl or Alt plus A–Z, 0–9 or F1–F12; Shift is optional. Save registers the combination and persists it only on success. A conflict preserves the previous shortcut and displays an error. Global activation is suspended while Settings is open, so recording a binding cannot start the microphone. Microphone/model/shortcut preferences persist; the listening state does not.
+In Settings, click Activation shortcut and press Ctrl or Alt plus Aâ€“Z, 0â€“9 or F1â€“F12; Shift is optional. Save registers the combination and persists it only on success. A conflict preserves the previous shortcut and displays an error. Global activation is suspended while Settings is open, so recording a binding cannot start the microphone. Microphone/model/shortcut preferences persist; the listening state does not.
 
-The requested rollback removes the transcript-panel workflow and revision/background-lock machinery. The app is a dark always-on-top listening switch with a green/red microphone circle and a gear menu. It starts off and listens until explicitly turned off, without an automatic session timeout. Microphone and model choices are the only settings.
+The requested rollback removes the transcript-panel workflow and revision/background-lock machinery. The app is a dark always-on-top listening switch with a green/red microphone circle and a gear menu. It starts off and listens until explicitly turned off, without an automatic session timeout. Microphone, model and activation shortcut choices are available in Settings.
 
 Docker still owns Whisper inference; Windows owns the microphone, shortcut, floating UI and desktop input. Native non-activation styling keeps ordinary toolbar clicks from becoming the destination. All companion-process windows are excluded from input. Focus is observed without UI Automation, reading document contents or rewriting fields. Stale destination/session results are discarded without disabling future speech. Native handles cannot distinguish every logical field inside one browser/application window.
 
@@ -29,13 +29,13 @@ Base supports English/Spanish and is the fast default. Base.en is English only. 
 
 ## Packaging, preferences and recovery
 
-Build-Portable.ps1 builds portable/v0.5.1 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher using the existing Tk feather resource from the bundled Tk DLL and removes this project's old resident Startup watcher. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
+Build-Portable.ps1 builds portable/v0.5.2 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher using the existing Tk feather resource from the bundled Tk DLL and removes this project's old resident Startup watcher. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
 
 Closing the app stops the microphone, cancels pending input and stops both project-owned speech containers (gateway and Whisper). The window reports Stopping dictation services until shutdown is verified. If cleanup cannot be confirmed, the visible app reports the error and allows closing again to retry rather than silently claiming success.
 
 A wait-only lifetime helper watches the app's inherited process handle. It is active only while the app runs and exits after cleanup. If the app is forcibly terminated, the helper attempts the same scoped cleanup. There is no persistent sign-in/container watcher and no automatic reopening when containers start in Docker Desktop. The normal desktop shortcut starts both services and the app; launch failure also stops the owned services. Stop-Dictation.ps1 remains a recovery command, not a second desktop shortcut. Docker Desktop and unrelated containers are not stopped, and no model files, volumes or configuration are deleted.
 
-LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model choices. The listener always starts off. Removing that preferences file resets those choices; do not delete model files or private .env to reset the UI. Earlier source/portable versions remain recovery history, not the default launcher.
+LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model/activation-shortcut choices. The listener always starts off. Removing that preferences file resets those choices; do not delete model files or private .env to reset the UI. Earlier source/portable versions remain recovery history, not the default launcher.
 
 ## Troubleshooting
 
