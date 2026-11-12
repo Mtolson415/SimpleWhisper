@@ -1,71 +1,86 @@
+<div align="center">
+
+![SimpleWhisper: your voice, your computer. Illustrated toolbar and synthetic writing field.](docs/assets/hero.svg)
+
 # SimpleWhisper
 
+**Local voice dictation for Windows. A floating microphone switch that stays out of your way.**
+
 [![Tests](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml/badge.svg)](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/Mtolson415/local-whisper-dictation)](https://github.com/Mtolson415/local-whisper-dictation/releases)
+[![MIT](https://img.shields.io/badge/license-MIT-60a5fa)](LICENSE)
+[![Windows 11 x64](https://img.shields.io/badge/platform-Windows_11_x64-7dd3fc)](docs/GETTING-STARTED.md)
 
-A small, dark, always-on-top Windows dictation switch. Click the microphone or press your activation shortcut (default **Ctrl+Alt+D**), click your text field, and speak. A green circle behind the microphone means listening; red means off. Listening has **no automatic timeout**. Turn it off yourself.
+[**Download 0.5.2**](https://github.com/Mtolson415/local-whisper-dictation/releases/tag/v0.5.2) · [**Get started**](docs/GETTING-STARTED.md) · [**Get help**](https://github.com/Mtolson415/local-whisper-dictation/issues/new/choose) · [**Contribute**](CONTRIBUTING.md)
 
-Version **0.5.2** restores a simple direct-input workflow. No transcript panel, copy button, review-only mode, background field lock, rolling revisions or auto-stop selector remains. This deliberately supersedes the complex 0.3/0.4 interface. Earlier source and portable folders remain available for recovery.
+</div>
 
-## Use
+## Speak into the app you already use
 
-The microphone starts/stops listening. The separate **On top** toggle controls whether the toolbar stays above other windows. Settings includes a shortcut field: click it, press Ctrl or Alt with a letter, number or F1�F12 (Shift optional), then Save. An unavailable shortcut keeps the previous binding. Shortcuts are suspended while Settings is open. The toolbar, title bars, dropdown fields and dropdown lists use a matching dark theme.
+Click your text field, turn on the microphone, and speak. SimpleWhisper recognizes a phrase after a short pause and inserts it into the active external field. Turn listening off when you finish.
 
-Startup recovery checked November 12: the installed launcher opened a responding window after about 30 seconds of speech-service preparation. See the operating guide for diagnosing a shortcut that appears inactive. This is a local Docker application with no Supabase dependency.
+| Everyday use | What you get |
+| --- | --- |
+| A floating toolbar | Microphone button, independent **On top** switch, and settings |
+| Your choice of shortcut | **Ctrl+Alt+D** by default; configurable in Settings |
+| Local recognition | Whisper.cpp in Docker, without a cloud inference fallback |
+| English and Spanish | Multilingual **Base** default; **Base.en** and **Turbo** alternatives |
+| Explicit microphone control | Starts off; no automatic listening timeout |
+| A clean exit | Closing stops the two owned containers and app helper |
 
-1. Open **SimpleWhisper** using the desktop shortcut. Docker Desktop and the speech containers must be running.
-2. With listening off, use the gear menu to select your microphone and model. **Base** is the fast English/Spanish default; **Base.en** is English only; **Turbo** is a slower multilingual comparison.
-3. Click an external text field and switch listening on. Ordinary clicks on the floating switch are designed to leave the external caret in place.
-4. Speak and pause briefly. Final phrases go directly into the active external field. No Enter is sent and no form is submitted.
-5. Turn listening off yourself when finished. Already-recorded audio may finish recognition after stopping.
+**Requires Windows 11 x64, Docker Desktop with Linux containers, and external model files.** The portable download includes the Windows runtime; models are separate. The executable is unsigned.
 
-Opening the app never starts the microphone automatically. Green indicates capture enabled, not proof that recognition/input succeeded. The short status line reports problems. Every companion-process window, including its settings, is excluded as an input destination.
+## Get started
 
-## Architecture and limits
+1. [Download and extract the Windows ZIP](https://github.com/Mtolson415/local-whisper-dictation/releases/tag/v0.5.2).
+2. Follow [setup](docs/GETTING-STARTED.md) to obtain models and configure your private `.env`.
+3. Start Docker Desktop, then run `Start-Dictation.ps1`. Preparation took around 30 seconds on a previously checked system; initial downloads can take longer.
+4. With listening off, choose your microphone/model in Settings. Click an external field and press **Ctrl+Alt+D**.
+5. Speak, pause and review the text. Switch listening off when finished.
 
-```text
-Windows microphone -> bounded frame queue -> phrase-detection worker
-    -> localhost Docker gateway -> Whisper.cpp container
-    -> internal Unicode clipboard + Ctrl+V -> active external field
+Green means capture enabled; red means off. Green does not prove recognition or insertion succeeded. Already-recorded audio may finish recognition after stopping. No Enter key is sent.
+
+<details>
+<summary><strong>How does speech reach my text field?</strong></summary>
+
+```mermaid
+flowchart LR
+    A[Windows microphone] --> B[Bounded phrase queue]
+    B --> C[Local Docker gateway]
+    C --> D[Whisper.cpp]
+    D --> E[Clipboard + Ctrl+V]
+    E --> F[Active external field]
 ```
 
-The microphone callback only copies/queues samples. Detection, inference and desktop input run outside it. A phrase ends at roughly 0.6 seconds of quiet or eight seconds of speech. This is incremental phrase dictation, not word-by-word streaming. Individual requests/queues are bounded without a total listening-duration deadline.
+Phrases end at roughly 0.6 seconds of quiet or eight seconds of speech. Stale results are discarded after detected destination/session changes. Keep focus steady: native handles cannot distinguish every logical field inside a browser window.
 
-The toolbar uses native non-activation styling. Foreground window and focused native child are checked before input. Stale results are discarded after a destination/session change; new speech is not permanently suppressed. Some apps share one native input window across several logical fields, so this does not identify every browser element. Keep focus stable while a phrase is being recognized if its destination matters. Elevated/password-field support, universal app compatibility and uninterrupted hardware uptime are not claimed.
+</details>
 
-## Setup and build
+<details>
+<summary><strong>Privacy and clipboard behavior</strong></summary>
 
-Requirements: Windows 11 x64, Docker Desktop with Linux containers, a microphone and external model files listed in models.lock.json. Source development uses Python 3.14; the portable companion includes its runtime.
+Inference uses loopback-only local containers. The app saves no recordings or transcript history. Initial downloads require internet access; fully disconnected operation has not been independently accepted. Insertion overwrites clipboard contents. Windows clipboard history/sync are separate settings. Whisper logs may contain recognized text: keep them private. [Security and privacy →](SECURITY.md)
 
-```powershell
-# Set WHISPER_MODEL_DIR in your private .env; see .env.example.
-.\Setup.ps1
-.\Build-Portable.ps1
-.\Install-Shortcuts.ps1
-.\Start-Dictation.ps1
-```
+</details>
 
-Build-Portable creates portable/v0.5.2 and a Windows ZIP. Models and private configuration are excluded. Install-Shortcuts updates the desktop launcher and removes the old resident Startup watcher. Exiting stops microphone capture, stops and verifies both dictation containers, and ends the app-lifetime helper. The desktop shortcut starts the services and opens the companion again. The executable is unsigned.
+<details>
+<summary><strong>No window or no text? Start here.</strong></summary>
 
-The desktop has one **SimpleWhisper** shortcut using the same Tk feather icon as the application. Closing the window stops microphone capture and both dictation speech services, so a separate Stop shortcut is unnecessary. Docker Desktop and unrelated containers are not stopped. Stop-Dictation.ps1 remains a recovery action; shortcut installation removes only the older Stop link owned by this project.
+Run `Start-Dictation.ps1` from PowerShell for visible errors. Check Docker Desktop, models and microphone choice. Test an ordinary scratch field and read the toolbar status. Protected/elevated apps may reject input. [Troubleshooting →](docs/README.md#troubleshooting)
 
-Only microphone/model/activation-shortcut choices persist in LocalAppData/LocalWhisperDictation/settings.json. Listening state and transcripts are never saved there. Re-select the microphone if Windows device names/indexes change.
+</details>
 
-## Verification - November 12, 2026
+## Release status
 
-53 ordinary Windows checks passed, with two opt-in desktop/lifecycle checks skipped by default. That real owned two-window test also passed separately: an actual mouse click on the toolbar preserved external focus; Unicode was inserted; a stale result was rejected after switching windows; and fresh text reached the second destination. The test opened no microphone and targeted no user app. Containerized Linux passed 29 checks and skipped 26 Windows/interactive checks. The portable Windows build passed. Hosted results are checked separately.
+**0.5.2** is current. The owner reported on November 12, 2026 that they tested it and it works; applications, duration and language coverage were not specified. Automated Windows/Linux checks cover gateway, segmentation, preferences and input/lifecycle guards. Earlier owned-window and packaged-lifecycle results are in the [handoff](HANDOFF.md); hosted checks are linked above.
 
-Your microphone accuracy, actual intended-app acceptance, prolonged use, reboot/offline behavior and second-host recovery still need their own checks. Review dictated text in the destination before sending it.
+Recognition can mishear or hallucinate. Review text before sending. Universal app compatibility, password/elevated fields, prolonged use, reboot/offline operation and second-host recovery are not established. See the [release checklist](docs/RELEASE-CHECKLIST.md) for v1.0 acceptance.
 
-## Privacy, learning and recovery
+## Explore and contribute
 
-Only loopback ports 17863 and 18081 are published. Inference uses the fixed local Docker service without a cloud fallback. The application does not save speech recordings or transcript history. Internal clipboard transport replaces clipboard contents; there is no manual copy/paste workflow. Windows clipboard history/sync are separate system settings. Upstream Whisper logs can contain recognition text and should remain private.
+- [Build/setup](docs/GETTING-STARTED.md) · [Operating guide](docs/README.md) · [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md)
+- [Presentation research](docs/PROJECT-PRESENTATION.md) · [Implementation review](docs/IMPLEMENTATION-REVIEW.md)
+- [Repository map](docs/REPOSITORIES.md) · [Maintainer handoff](HANDOFF.md)
 
-See [the operating guide](docs/README.md), [primary-source implementation review](docs/IMPLEMENTATION-REVIEW.md), [repository map](docs/REPOSITORIES.md) and [current handoff](HANDOFF.md). The [design reference library](docs/DESIGN-REFERENCE-LIBRARY.md) remains reference documentation, not an asset database. Never commit recordings, transcripts, secrets, weights, private databases or backups.
-
-## Exit ownership and v1.0 gate
-
-The latest direction requires no dictation-owned background processes after exit. Normal shutdown verifies both scoped containers are stopped; a process-handle supervisor covers abnormal owner termination and then exits. Only services with this project's Compose label and the allowlisted dictation/whisper service label are stopped. Other local AI containers and the shared Docker engine remain outside this app's ownership.
-
-The simplified interface needs no feature expansion for v1.0. Actual packaged normal/forced-exit cleanup and close/reopen checks passed. The remaining release gate is real microphone-to-intended-application acceptance after the earlier input regressions, including a continuous listening/off/on trial. Record those results before calling v1.0 ready. General OS failure, a stopped Docker daemon or a forcibly killed cleanup helper cannot be guaranteed away; cleanup failures are not reported as success.
-
-Packaged lifecycle acceptance uses DICTATION_LIFECYCLE_TEST=1 with unittest discover -s tests -p test_packaged_lifecycle.py. It starts the current package twice, opens no microphone, closes only its own window in the normal case and terminates only its own process in the forced case. Both cases verified no running dictation containers or project helper processes and preservation of unrelated container IDs. The inherited singleton guard and launcher wait also prevent a new owner from starting while prior cleanup is finishing. The installer removes the old resident Startup watcher; final installed state is closed with no dictation-owned services running.
+Maintained by [Michael Tolson](https://github.com/Mtolson415). Original source is [MIT licensed](LICENSE). Dependencies retain their upstream licenses; weights are not bundled. [Third-party notices](THIRD_PARTY_NOTICES.md).

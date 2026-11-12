@@ -33,8 +33,24 @@ jobs:
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install -r requirements.txt
           .\Build-Portable.ps1
+      - name: Verify distribution and write checksum
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead("$PWD/SimpleWhisper-Windows-x64.zip")
+          try {
+            $names = @($archive.Entries.FullName | ForEach-Object { $_.Replace('\', '/') })
+            foreach ($required in @('portable/SimpleWhisper/SimpleWhisper.exe', 'docs/assets/hero.svg', 'docs/GETTING-STARTED.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/PYTHON-LICENSE.txt', '.env.example', 'models.lock.json', 'Start-Dictation.ps1')) {
+              if ($required -notin $names) { throw "Missing package file: $required" }
+            }
+            if ($names | Where-Object { $_ -match '(^|/)(\.env|settings\.json)$|\.(gguf|bin|wav|mp3|sqlite|db)$' }) { throw 'Unexpected private or model/audio payload' }
+          } finally { $archive.Dispose() }
+          $hash = (Get-FileHash SimpleWhisper-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  SimpleWhisper-Windows-x64.zip" | Set-Content SHA256SUMS.txt -Encoding ascii
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: SimpleWhisper-Windows-x64
-          path: SimpleWhisper-Windows-x64.zip
+          path: |
+            SimpleWhisper-Windows-x64.zip
+            SHA256SUMS.txt
           retention-days: 14

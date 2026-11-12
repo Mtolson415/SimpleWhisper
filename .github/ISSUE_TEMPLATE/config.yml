@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Setup and troubleshooting
+    url: https://github.com/Mtolson415/local-whisper-dictation/blob/main/docs/GETTING-STARTED.md
+    about: Check requirements, models and first-run setup.
+  - name: Security reporting
+    url: https://github.com/Mtolson415/local-whisper-dictation/blob/main/SECURITY.md
+    about: Report vulnerabilities privately; do not post sensitive details in issues.
