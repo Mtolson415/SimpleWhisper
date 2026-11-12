@@ -31,3 +31,27 @@ class PhraseTests(unittest.TestCase):
         buffer = PhraseBuffer()
         buffer.add(pcm(1000, 0.5))
         self.assertEqual(buffer.flush(), pcm(1000, 0.5))
+
+
+class RoutingTests(unittest.TestCase):
+    def test_focus_change_discards_old_partial_audio(self):
+        from audio_segments import AudioRouter
+        router = AudioRouter()
+        first = b'\xff\x1f' * 1600
+        second = b'\xff\x2f' * 1600
+        router.feed(1, (1, 2), first)
+        router.feed(1, (3, 4), second)
+        self.assertEqual(router.feed(1, None, None), ((3, 4), second))
+
+    def test_helper_focus_does_not_keep_old_speech(self):
+        from audio_segments import AudioRouter
+        router = AudioRouter()
+        router.feed(1, (1, 2), b'\xff\x1f' * 1600)
+        router.feed(1, None, b'')
+        self.assertIsNone(router.feed(1, None, None))
+
+    def test_new_recording_does_not_flush_old_audio(self):
+        from audio_segments import AudioRouter
+        router = AudioRouter()
+        router.feed(1, (1, 2), b'\xff\x1f' * 1600)
+        self.assertIsNone(router.feed(2, None, None))

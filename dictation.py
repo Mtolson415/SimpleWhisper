@@ -1,5 +1,6 @@
 """Windows microphone and desktop bridge. Run as the ordinary signed-in user."""
 import ctypes
+from collections import deque
 from ctypes import wintypes
 import io
 import json
@@ -14,18 +15,16 @@ import urllib.request
 import wave
 
 import sounddevice as sd
-from audio_segments import PhraseBuffer
+from audio_segments import AudioRouter
 from transcript_quality import clean_transcript
-from rolling_audio import RollingPhraseBuffer, LatestJobs
-from revision_span import RevisionSpan
 from windows_clipboard import set_clipboard_text
 from windows_input import paste_shortcut
-from locked_target import LockedTarget
+from windows_focus import Desktop
+import preferences
 
 ENDPOINT = 'http://127.0.0.1:17863/transcribe'
 RATE = 16000
-AUTO_STOP = {'Never': None, 'After 2 minutes': 120, 'After 5 minutes': 300,
-             'After 15 minutes': 900, 'After 30 minutes': 1800}
+VERSION = '0.5.0'
 
 
 def gateway_running():
@@ -96,118 +95,102 @@ def wav_bytes(pcm):
 
 
 class App:
+    """One continuous listener and one direct-input path; no transcript widget."""
     def __init__(self):
-        self.user = ctypes.WinDLL('user32', use_last_error=True)
-        self.user.GetForegroundWindow.restype = wintypes.HWND
-        self.user.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
-        self.user.GetAncestor.restype = wintypes.HWND
-        self.user.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
+        self.desktop = Desktop()
+        self.user = self.desktop.user
         self.root = tk.Tk()
-        self.root.title('Local Whisper Dictation 0.4.0')
-        self.root.geometry('640x460')
-        self.root.minsize(600, 420)
+        self.root.withdraw()
+        self.root.title('Whisper Dictation ' + VERSION)
+        self.root.configure(bg='#171b23')
+        self.root.geometry('310x96')
+        self.root.resizable(False, False)
+        self.root.attributes('-topmost', True)
         self.events = queue.Queue()
+        self.jobs = queue.Queue(maxsize=4)
+        self.audio_frames = queue.Queue(maxsize=128)
+        self.pending = deque()
         self.stream = None
-        self.busy = True  # Wait for the startup model selection before capture.
-        self.chunks = []
-        self.frames = 0
-        self.target = None
-        self.record_live = False
-        self.record_continuous = False
-        self.record_rolling = False
-        self.session_limit_seconds = None
-        self.live_paste_suppressed = False
-        self.pending_pastes = []
-        self.record_locked = False
-        self.locked_target = None
-        self.status = tk.StringVar(value='Click a text field in another app. Ctrl+Alt+D starts/stops.')
-        panel = ttk.Frame(self.root, padding=12)
-        panel.pack(fill='both', expand=True)
-        panel.columnconfigure(1, weight=1)
-        panel.rowconfigure(5, weight=1)
-        ttk.Label(panel, textvariable=self.status, wraplength=560).grid(
-            row=0, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+        self.session = 0
+        self.listening = False
+        self.busy = True
+        self.active_target = None
+        self.note = 'Loading speech model…'
+        self.saved = preferences.load()
         self.devices = [None]
-        names = ['Windows default microphone']
+        self.device_names = ['Windows default microphone']
         for index, device in enumerate(sd.query_devices()):
             if device['max_input_channels'] > 0:
                 self.devices.append(index)
-                names.append(f"{index}: {device['name']}")
-        ttk.Label(panel, text='Microphone').grid(row=1, column=0, sticky='w', padx=(0, 10))
-        self.microphone = ttk.Combobox(panel, values=names, state='readonly', width=35)
-        self.microphone.current(0)
-        self.microphone.grid(row=1, column=1, sticky='ew', pady=3)
-        self.model_ids = []
-        ttk.Label(panel, text='Speech model').grid(row=2, column=0, sticky='w', padx=(0, 10))
-        self.model_selector = ttk.Combobox(panel, values=['Loading speech models…'], state='disabled', width=35)
-        self.model_selector.current(0)
-        self.model_selector.grid(row=2, column=1, sticky='ew', pady=3)
-        self.model_selector.bind('<<ComboboxSelected>>', self.change_model)
-        self.direct_input = tk.BooleanVar(value=True)
-        options = ttk.Frame(panel)
-        options.grid(row=3, column=0, columnspan=2, sticky='ew', pady=(8, 4))
-        options.columnconfigure(0, weight=1)
-        options.columnconfigure(1, weight=1)
-        ttk.Checkbutton(options, text='Dictate into active text box',
-                        variable=self.direct_input).grid(row=0, column=0, sticky='w', pady=3)
-        self.live_input = tk.BooleanVar(value=True)
-        self.live_checkbox = ttk.Checkbutton(options, text='Live phrases at pauses',
-                                             variable=self.live_input)
-        self.live_checkbox.grid(row=1, column=0, sticky='w', pady=3)
-        self.continuous_input = tk.BooleanVar(value=True)
-        self.continuous_checkbox = ttk.Checkbutton(options, text='Continuous listening',
-            variable=self.continuous_input, command=lambda: self.live_input.set(True) if self.continuous_input.get() else None)
-        self.continuous_checkbox.grid(row=1, column=1, sticky='w', pady=3)
-        timeout = ttk.Frame(options)
-        timeout.grid(row=2, column=1, sticky='w', pady=3)
-        ttk.Label(timeout, text='Auto-stop').pack(side='left', padx=(0, 6))
-        self.auto_stop = ttk.Combobox(timeout, values=list(AUTO_STOP), state='readonly', width=18)
-        self.auto_stop.current(0)
-        self.auto_stop.pack(side='left')
-        self.rolling_input = tk.BooleanVar(value=False)
-        self.rolling_checkbox = ttk.Checkbutton(options,
-            text='Rolling drafts (experimental)', variable=self.rolling_input,
-            command=lambda: self.live_input.set(True) if self.rolling_input.get() else None)
-        self.rolling_checkbox.grid(row=2, column=0, sticky='w', pady=3)
-        self.always_on_top = tk.BooleanVar(value=False)
-        ttk.Checkbutton(options, text='Always on top', variable=self.always_on_top,
-                        command=self.set_always_on_top).grid(row=0, column=1, sticky='w', pady=3)
-        self.lock_input = tk.BooleanVar(value=True)
-        self.lock_checkbox = ttk.Checkbutton(options, text='Lock to starting text box', variable=self.lock_input)
-        self.lock_checkbox.grid(row=3, column=0, columnspan=2, sticky='w', pady=3)
-        ttk.Label(panel, text='Transcript preview').grid(row=4, column=0, columnspan=2, sticky='w', pady=(4, 4))
-        transcript = ttk.Frame(panel)
-        transcript.grid(row=5, column=0, columnspan=2, sticky='nsew')
-        self.preview = tk.Text(transcript, height=6, width=40, wrap='word', padx=8, pady=6)
-        scrollbar = ttk.Scrollbar(transcript, command=self.preview.yview)
-        self.preview.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side='right', fill='y')
-        self.preview.pack(side='left', fill='both', expand=True)
-        ttk.Button(panel, text='Copy transcript', command=self.copy).grid(
-            row=6, column=0, columnspan=2, sticky='e', pady=(8, 0))
-        self.root.update_idletasks()
-        self.own_window = self.user.GetAncestor(self.root.winfo_id(), 2)
+                self.device_names.append(f"{index}: {device['name']}")
+        self.microphone = self.saved.get('microphone', self.device_names[0])
+        if self.microphone not in self.device_names:
+            self.microphone = self.device_names[0]
+        self.model = self.saved.get('model', 'base')
+        self.models = []
+        self.settings_window = None
+        self.canvas = tk.Canvas(self.root, width=310, height=96, bg='#171b23', highlightthickness=0,
+                                cursor='hand2', takefocus=False)
+        self.canvas.pack()
+        self.canvas.bind('<Button-1>', self.click)
+        self.menu = tk.Menu(self.root, tearoff=False, bg='#232936', fg='#eef2f8',
+                            activebackground='#354052', activeforeground='white')
+        self.menu.add_command(label='Microphone and speech model…', command=self.open_settings)
+        self.menu.add_separator()
+        self.menu.add_command(label='Quit', command=self.close)
         self.root.protocol('WM_DELETE_WINDOW', self.close)
+        self.root.update_idletasks()
+        self.own_window = self.desktop.toolbar(self.root)
+        self.root.deiconify()
+        self.draw()
         threading.Thread(target=self.hotkeys, daemon=True).start()
         threading.Thread(target=self.monitor_container, daemon=True).start()
-        threading.Thread(target=self.load_models, daemon=True).start()
-        self.root.after(50, self.poll)
+        threading.Thread(target=self.load_models, args=(self.model,), daemon=True).start()
+        threading.Thread(target=self.recognize_jobs, daemon=True).start()
+        threading.Thread(target=self.process_audio, daemon=True).start()
+        self.root.after(40, self.poll)
+
+    def draw(self):
+        state = (self.listening, self.note)
+        if getattr(self, '_drawn', None) == state:
+            return
+        self._drawn = state
+        c = self.canvas
+        c.delete('all')
+        color = '#20c779' if self.listening else '#e45461'
+        c.create_oval(13, 14, 59, 60, fill=color, outline='')
+        c.create_rectangle(32, 26, 40, 40, fill='#ffffff', outline='')
+        c.create_oval(32, 22, 40, 30, fill='#ffffff', outline='')
+        c.create_arc(26, 27, 46, 47, start=180, extent=180, style='arc', outline='#ffffff', width=2)
+        c.create_line(36, 47, 36, 52, fill='white', width=2)
+        c.create_line(30, 52, 42, 52, fill='white', width=2)
+        c.create_text(72, 27, anchor='w', text='Listening' if self.listening else 'Off',
+                      fill='#f2f5fa', font=('Segoe UI', 13, 'bold'))
+        c.create_text(72, 49, anchor='w', text='Ctrl+Alt+D', fill='#a6b1c1', font=('Segoe UI', 9))
+        c.create_oval(206, 24, 242, 48, fill=color if self.listening else '#3b4352', outline='')
+        c.create_oval(218 if self.listening else 208, 26,
+                      240 if self.listening else 230, 46, fill='white', outline='')
+        c.create_text(278, 36, text='⚙', fill='#c8d2df', font=('Segoe UI Symbol', 19))
+        c.create_text(13, 79, text=self.note[:49], anchor='w', fill='#a6b1c1', font=('Segoe UI', 9))
+
+    def click(self, event):
+        if event.x >= 259 and event.y < 65:
+            self.menu.tk_popup(self.root.winfo_rootx() + 140, self.root.winfo_rooty() + 60)
+        else:
+            self.toggle()
 
     def hotkeys(self):
-        # Register only the shortcut, without installing a keyboard logging hook.
+        self.user.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
         if not self.user.RegisterHotKey(None, 1, 0x4000 | 0x2 | 0x1, ord('D')):
-            self.events.put(('error', 'Ctrl+Alt+D is in use. Close the other dictation instance.'))
+            self.events.put(('warning', 'Ctrl+Alt+D is in use; use the toggle.'))
             return
         msg = wintypes.MSG()
         try:
             while self.user.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
                 if msg.message == 0x0312:
-                    self.events.put(('toggle', self.user.GetForegroundWindow()))
+                    self.events.put(('toggle', None))
         finally:
             self.user.UnregisterHotKey(None, 1)
-
-    def set_always_on_top(self):
-        self.root.attributes('-topmost', self.always_on_top.get())
 
     def monitor_container(self):
         failures = 0
@@ -219,415 +202,198 @@ class App:
                 return
             time.sleep(2)
 
-    def load_models(self, model='base'):
+    def load_models(self, model):
         try:
-            request = urllib.request.Request(ENDPOINT.rsplit('/', 1)[0] + '/models')
-            if model is not None:
-                request = urllib.request.Request(ENDPOINT.rsplit('/', 1)[0] + '/models/select',
-                    json.dumps({'model': model}).encode(), {'Content-Type': 'application/json'})
+            request = urllib.request.Request(ENDPOINT.rsplit('/', 1)[0] + '/models/select',
+                json.dumps({'model': model}).encode(), {'Content-Type': 'application/json'})
             with urllib.request.urlopen(request, timeout=190) as response:
                 self.events.put(('models', json.load(response)))
         except Exception:
-            self.events.put(('error', 'Model list/change failed. Check the Docker model files.'))
+            self.events.put(('model_error', 'Model unavailable; check Docker and settings.'))
 
-    def change_model(self, event=None):
-        if self.busy or self.stream:
+    def open_settings(self):
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.lift()
             return
-        index = self.model_selector.current()
-        if not 0 <= index < len(self.model_ids):
+        window = self.settings_window = tk.Toplevel(self.root)
+        window.title('Dictation settings')
+        window.configure(bg='#171b23')
+        window.attributes('-topmost', True)
+        window.resizable(False, False)
+        style = ttk.Style(window)
+        style.theme_use('clam')
+        style.configure('Dark.TCombobox', fieldbackground='#252c39', background='#333d4c', foreground='#f2f5fa')
+        tk.Label(window, text='Microphone', bg='#171b23', fg='#eef2f8').pack(anchor='w', padx=16, pady=(14, 4))
+        mic = ttk.Combobox(window, values=self.device_names, state='disabled' if self.listening else 'readonly',
+                           width=48, style='Dark.TCombobox')
+        mic.set(self.microphone)
+        mic.pack(padx=16)
+        tk.Label(window, text='Speech model', bg='#171b23', fg='#eef2f8').pack(anchor='w', padx=16, pady=(12, 4))
+        labels = [m['label'] for m in self.models]
+        model = ttk.Combobox(window, values=labels, state='disabled' if self.listening else 'readonly',
+                             width=48, style='Dark.TCombobox')
+        model.set(next((m['label'] for m in self.models if m['id'] == self.model), self.model))
+        model.pack(padx=16)
+        tk.Label(window, text='Turn listening off before changing these settings.' if self.listening else
+                 'Listening continues until you turn it off. No automatic timeout.',
+                 bg='#171b23', fg='#a6b1c1').pack(padx=16, pady=12)
+        def apply():
+            self.microphone = mic.get()
+            index = model.current()
+            chosen = self.models[index]['id'] if 0 <= index < len(self.models) else self.model
+            try:
+                preferences.save(self.microphone, chosen)
+            except OSError:
+                self.note = 'Settings could not be saved.'
+            window.destroy()
+            self.settings_window = None
+            if chosen != self.model:
+                self.busy = True
+                self.note = 'Loading speech model…'
+                self.draw()
+                threading.Thread(target=self.load_models, args=(chosen,), daemon=True).start()
+        tk.Button(window, text='Save', command=apply, state='disabled' if self.listening or self.busy else 'normal',
+                  bg='#303b4b', fg='white', activebackground='#42516a', activeforeground='white',
+                  relief='flat', padx=20, pady=5).pack(anchor='e', padx=16, pady=(0, 14))
+
+    def toggle(self):
+        if self.listening:
+            self.stop()
+            self.enqueue_audio(None, None)
+            self.note = 'Off · click the switch to listen'
+            self.draw()
             return
-        self.busy = True
-        self.status.set('Loading selected speech model…')
-        self.model_selector.configure(state='disabled')
-        threading.Thread(target=self.load_models, args=(self.model_ids[index],), daemon=True).start()
+        if self.busy:
+            self.note = 'Speech model is still loading.'
+            self.draw()
+            return
+        self.session += 1
+        self.pending.clear()
+        self.active_target = self.desktop.destination()
+        try:
+            index = self.device_names.index(self.microphone)
+            self.stream = sd.RawInputStream(device=self.devices[index], samplerate=RATE,
+                channels=1, dtype='int16', callback=self.audio)
+            self.listening = True
+            self.stream.start()
+            self.note = 'Speak into the active text box'
+        except Exception:
+            self.stop()
+            self.note = 'Microphone unavailable · open settings'
+        self.draw()
+
+    def stop(self):
+        self.listening = False
+        if self.stream:
+            stream, self.stream = self.stream, None
+            stream.stop()
+            stream.close()
 
     def audio(self, data, frames, timing, status):
+        if not self.listening:
+            return
         if status:
-            self.events.put(('audio_warning', 'Microphone warning; some audio may be missing. Still listening.'))
-        limit = self.session_limit_seconds if self.record_continuous else 120
-        if limit is not None and self.frames + frames > RATE * limit:
-            self.events.put(('limit', None))
-            return
-        if self.record_live:
-            if self.record_rolling:
-                job = self.segmenter.feed(bytes(data))
-                if job:
-                    self.phrases.put(job)
-                self.frames += frames
-                return
-            phrase = self.segmenter.add(bytes(data))
-            if phrase:
-                try:
-                    self.phrases.put_nowait(phrase)
-                except queue.Full:
-                    try:
-                        self.phrases.get_nowait()
-                    except queue.Empty:
-                        pass
-                    try:
-                        self.phrases.put_nowait(phrase)
-                    except queue.Full:
-                        pass
-                    self.events.put(('audio_warning', 'Transcription fell behind; skipped a queued phrase. Still listening.'))
-        else:
-            self.chunks.append(bytes(data))
-        self.frames += frames
+            self.events.put(('warning', 'Microphone warning · still listening'))
+        target = self.active_target
+        self.enqueue_audio(bytes(data) if target else b'', target)
 
-    def toggle(self, target):
-        if self.busy:
-            return
-        if self.stream:
-            self.stop()
-            self.busy = True
-            if self.record_live:
-                self.finish_phrases()
-                self.status.set('Finishing live phrases…')
-                return
-            self.status.set('Transcribing locally…')
-            pcm = b''.join(self.chunks)
-            self.chunks.clear()
-            threading.Thread(target=self.recognize, args=(pcm,), daemon=True).start()
-            return
-        if self.direct_input.get() and target == self.user.GetAncestor(self.root.winfo_id(), 2):
-            self.status.set('Click the destination text box first, then press Ctrl+Alt+D to record.')
-            return
-        if self.direct_input.get() and self.user.GetForegroundWindow() != target:
-            self.status.set('Destination changed before recording started. Click the text box and press Ctrl+Alt+D again.')
-            return
-        self.target = target
-        self.record_locked = self.lock_input.get()
-        self.locked_target = LockedTarget.begin() if self.record_locked and self.direct_input.get() else None
-        self.pending_pastes.clear()
-        self.chunks = []
-        self.frames = 0
-        self.record_live = self.live_input.get()
-        if self.continuous_input.get():
-            self.record_live = True
-            self.live_input.set(True)
-        self.record_continuous = self.record_live and self.continuous_input.get()
-        self.session_limit_seconds = AUTO_STOP[self.auto_stop.get()]
-        self.record_rolling = self.record_live and self.rolling_input.get()
-        if self.record_live:
-            self.segmenter = RollingPhraseBuffer() if self.record_rolling else PhraseBuffer()
-            self.phrases = LatestJobs() if self.record_rolling else queue.Queue(maxsize=8)
-            self.draft_phrase = None
-            self.completed_text = ''
-            self.draft_span = None
-            self.draft_inserted = False
-            self.live_paste_suppressed = False
-            self.preview.delete('1.0', 'end')
-            worker = self.recognize_drafts if self.record_rolling else self.recognize_phrases
-            threading.Thread(target=worker, daemon=True).start()
+    def enqueue_audio(self, pcm, target):
         try:
-            self.stream = sd.RawInputStream(device=self.devices[self.microphone.current()],
-                                            samplerate=RATE, channels=1, dtype='int16', callback=self.audio)
-            self.stream.start()
-            self.status.set('Rolling drafts — updates while speaking; Ctrl+Alt+D stops.' if self.record_rolling else
-                            'Live phrases — pause briefly for text; Ctrl+Alt+D stops.' if self.record_live
-                            else 'Recording — Ctrl+Alt+D to stop. Maximum two minutes.')
-            if self.record_locked:
-                if self.locked_target and self.locked_target.background_supported:
-                    self.status.set('Text box locked, including background updates. Ctrl+Alt+D stops.')
-                else:
-                    self.status.set('Background lock unavailable here. Keep the starting text box focused; preview retains text.')
-        except Exception as error:
-            self.stop()
-            if self.record_live:
-                self.busy = True
-                self.finish_phrases()
-            self.status.set('Microphone failed: ' + str(error))
-
-    def finish_phrases(self):
-        if self.record_rolling:
-            job = self.segmenter.finish()
-            if job:
-                self.phrases.put(job)
-            self.phrases.put(None)
-            return
-        phrase = self.segmenter.flush()
-        if phrase:
-            try:
-                self.phrases.put_nowait(phrase)
-            except queue.Full:
-                self.status.set('Live queue full; final phrase discarded. Review retained text.')
-        try:
-            self.phrases.put_nowait(None)
+            self.audio_frames.put_nowait((self.session, target, pcm))
         except queue.Full:
-            self.phrases.get_nowait()
-            self.phrases.put_nowait(None)
+            self.events.put(('warning', 'Audio queue busy · speak again'))
 
-    def recognize_phrases(self):
-        phrases = self.phrases
+    def process_audio(self):
+        router = AudioRouter()
         while True:
-            pcm = phrases.get()
-            if pcm is None:
-                break
-            try:
-                self.events.put(('live_text', self.transcribe_pcm(pcm)))
-            except Exception:
-                self.events.put(('live_error', 'A live phrase failed. Review text; check Docker or use normal mode.'))
-        self.events.put(('live_finished', None))
+            session, target, pcm = self.audio_frames.get()
+            if session != self.session:
+                continue
+            phrase = router.feed(session, target, pcm)
+            if phrase:
+                self.submit(phrase[1], phrase[0], session)
 
-    def recognize_drafts(self):
-        jobs = self.phrases
-        while True:
-            job = jobs.get()
-            if job is None:
-                break
-            try:
-                text = self.transcribe_pcm(job['audio'])
-                self.events.put(('draft_text', (job['phrase'], text, job['final'])))
-            except Exception:
-                self.events.put(('live_error', 'A rolling update failed; still listening.'))
-        self.events.put(('live_finished', None))
-
-    def remember_draft(self, span, text, final):
-        if self.user.GetForegroundWindow() != self.target:
-            self.draft_abandoned = True
-            self.draft_span = None
-            return
-        if not span.record(text):
-            self.live_paste_suppressed = True
-            self.status.set('Could not verify the inserted span. Revisions stopped; use the preview.')
-        if final and self.draft_span is span:
-            self.draft_span = None
-
-    def render_draft(self, phrase, text, final):
-        text = clean_transcript(text)
-        if self.draft_phrase != phrase:
-            self.draft_phrase = phrase
-            self.draft_span = None
-            self.draft_inserted = False
-            self.draft_abandoned = False
-            self.draft_prefix = ' ' if self.completed_text else ''
-            self.draft_last = ''
-            if not self.record_locked:
-                self.target = self.user.GetForegroundWindow()
-        shown = self.completed_text + self.draft_prefix + text
-        self.preview.delete('1.0', 'end')
-        self.preview.insert('1.0', shown[-20000:])
-        if self.record_locked and self.locked_target and self.locked_target.background_supported:
-            if text and self.direct_input.get() and not self.live_paste_suppressed:
-                if self.write_locked(self.draft_prefix + text, revise=self.draft_inserted):
-                    self.draft_inserted = True
-            if final:
-                self.completed_text = shown[-20000:]
-            return
-        if text and self.direct_input.get() and not self.live_paste_suppressed:
-            if self.user.GetForegroundWindow() != self.target:
-                self.draft_abandoned = True
-                self.draft_span = None
-                self.status.set('Paste paused. Return to the original text box; the next phrase will resume there.')
-            elif not self.draft_abandoned and not any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
-                outgoing = self.draft_prefix + text
-                if not self.draft_inserted:
-                    span = RevisionSpan.begin()
-                    if final or span is not None:
-                        if self.insert(outgoing, live=True):
-                            self.draft_inserted = True
-                            self.draft_last = outgoing
-                            self.draft_span = span
-                            if span:
-                                self.root.after(100, lambda s=span, t=outgoing, f=final: self.remember_draft(s, t, f))
-                    else:
-                        self.status.set('Rolling preview active. This field gets final phrases; safe revisions unavailable.')
-                elif outgoing != self.draft_last:
-                    span = self.draft_span
-                    if span and span.prepare_revision():
-                        if self.insert(outgoing, live=True):
-                            self.draft_last = outgoing
-                            self.root.after(100, lambda s=span, t=outgoing, f=final: self.remember_draft(s, t, f))
-                    else:
-                        self.live_paste_suppressed = True
-                        self.status.set('Caret or draft changed. Automatic revisions stopped; use the preview.')
-        if final:
-            self.completed_text = shown[-20000:]
+    def submit(self, pcm, target, session=None):
+        try:
+            self.jobs.put_nowait((self.session if session is None else session, target, pcm))
+        except queue.Full:
+            self.events.put(('warning', 'Speech queue busy · speak again'))
 
     def transcribe_pcm(self, pcm):
         request = urllib.request.Request(ENDPOINT, wav_bytes(pcm), {'Content-Type': 'audio/wav'})
         with urllib.request.urlopen(request, timeout=190) as response:
             return clean_transcript(json.load(response)['text'])
 
-    def stop(self):
-        if self.stream:
-            self.stream.stop()
-            self.stream.close()
-            self.stream = None
+    def recognize_jobs(self):
+        while True:
+            session, target, pcm = self.jobs.get()
+            if session != self.session:
+                continue
+            try:
+                text = self.transcribe_pcm(pcm)
+                self.events.put(('text', (session, target, text)))
+            except Exception:
+                self.events.put(('warning', 'Recognition failed · still listening'))
 
-    def recognize(self, pcm):
-        try:
-            text = self.transcribe_pcm(pcm)
-            self.events.put(('text', text))
-        except Exception:
-            self.events.put(('error', 'Transcription failed. Check the Whisper container in Docker, then try again.'))
-
-    def copy(self, text=None):
-        if text is None:
-            text = self.preview.get('1.0', 'end-1c')
-        set_clipboard_text(self.root.winfo_id(), text)
-
-    def flush_pastes(self):
-        if not self.pending_pastes:
-            return
-        if (not self.direct_input.get() or self.live_paste_suppressed
-                or self.user.GetForegroundWindow() != self.target):
-            self.pending_pastes.clear()
-            self.status.set('Paste paused. Return to the original text box; new phrases will resume there.')
-            return
-        if any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
-            return
-        text = ''.join(self.pending_pastes)
-        self.pending_pastes.clear()
-        self.insert(text, live=True)
-
-    def write_locked(self, text, revise=False):
-        if self.locked_target.write(text, revise=revise):
-            self.status.set('Text sent to locked box. Ctrl+Alt+D stops recording.')
-            return True
-        self.live_paste_suppressed = True
-        self.status.set('Locked box changed or rejected input. Text retained in preview; stop and restart to relock.')
-        return False
-
-    def insert(self, text, attempts=0, live=False):
-        prefix = text[:len(text) - len(text.lstrip(' \t'))]
-        cleaned = clean_transcript(text)
-        text = prefix + cleaned if cleaned else ''
-        if not text:
-            if not live:
-                self.busy = False
-            return
-        if live and self.live_paste_suppressed:
-            return
-        if not self.direct_input.get():
-            if not live:
-                self.busy = False
-            self.status.set('Transcript ready below. Use Copy transcript to paste it yourself.')
-            return
-        if self.record_locked:
-            if self.locked_target and self.locked_target.background_supported:
-                result = self.write_locked(text)
-                if not live:
-                    self.busy = False
-                return result
-            if self.locked_target is None or not self.locked_target.is_focused():
-                if not live:
-                    self.busy = False
-                self.status.set('Background lock unavailable. Return to the starting text box or copy the preview.')
-                return False
-        else:
-            self.target = self.user.GetForegroundWindow()
-            if self.target == getattr(self, 'own_window', None):
-                if not live:
-                    self.busy = False
-                self.status.set('Click a destination text box; transcript retained in preview.')
-                return False
-        if self.user.GetForegroundWindow() != self.target:
-            if not live:
-                self.busy = False
-            self.status.set('Paste paused. Return to the original text box; new phrases will resume there.' if live else
-                            'Window changed. Transcript retained below; copy and paste when ready.')
-            return
-        if any(self.user.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, ord('D'))):
-            if live:
-                if sum(map(len, self.pending_pastes)) + len(text) > 20000:
-                    self.pending_pastes.clear()
-                    self.live_paste_suppressed = True
-                    self.status.set('Pending paste limit reached. Transcript retained; use Copy transcript.')
-                    return False
-                self.pending_pastes.append(text)
-                self.status.set('Release shortcut keys to paste the pending phrase.')
-                return
-            if attempts < 40:
-                self.root.after(50, lambda: self.insert(text, attempts + 1))
+    def deliver(self, session, target, text):
+        text = clean_transcript(text)
+        if not text or session != self.session:
+            return False
+        if target is None or self.desktop.destination() != target:
+            self.note = 'Destination changed · speak again'
+            return False
+        if self.desktop.keys_held():
+            if len(self.pending) < 16:
+                self.pending.append((session, target, text))
             else:
-                self.busy = False
-                self.status.set('Release shortcut keys. Transcript retained; use Copy transcript.')
-            return
-        try:
-            self.copy(text)
-        except OSError:
-            if not live:
-                self.busy = False
-            self.status.set('Clipboard busy. Transcript retained in preview; try Copy transcript.')
+                self.note = 'Input busy · speak again'
             return False
-        # Never send Enter or submit a form. Clipboard retains the transcript.
         try:
-            paste_shortcut()
+            set_clipboard_text(self.own_window, text + ' ')
+            if self.desktop.destination() != target:
+                self.note = 'Destination changed · speak again'
+                return False
+            paste_shortcut()  # Never Enter; never selects or rewrites existing text.
+            self.note = 'Listening · text sent' if self.listening else 'Off · final phrase sent'
+            return True
         except OSError:
-            if not live:
-                self.busy = False
-            self.status.set('Windows blocked paste. Use Copy transcript; elevated apps are unsupported.')
+            self.note = 'Input blocked · check the active text box'
             return False
-        if not live:
-            self.busy = False
-        self.status.set('Live phrase pasted; Ctrl+Alt+D stops recording.' if live and self.stream else
-                        'Paste requested. Review text in your app. Ctrl+Alt+D for another recording.')
-        return True
 
     def poll(self):
-        self.flush_pastes()
+        self.active_target = self.desktop.destination()
+        pending, self.pending = self.pending, deque()
+        while pending:
+            self.deliver(*pending.popleft())
         try:
             while True:
                 event, value = self.events.get_nowait()
                 if event == 'toggle':
-                    self.toggle(value)
+                    self.toggle()
                 elif event == 'container_stopped':
                     self.close()
                     return
                 elif event == 'models':
-                    self.model_ids = [model['id'] for model in value['models']]
-                    self.model_selector.configure(values=[model['label'] for model in value['models']])
-                    self.model_selector.current(self.model_ids.index(value['active']))
+                    self.models = value['models']
+                    self.model = value['active']
                     self.busy = False
-                    self.status.set('Model ready. Click a text field; Ctrl+Alt+D starts/stops.')
-                elif event == 'draft_text':
-                    self.render_draft(*value)
-                elif event == 'live_text' and value:
-                    prefix = ' ' if self.preview.get('1.0', 'end-1c') else ''
-                    self.preview.insert('end', prefix + value)
-                    if len(self.preview.get('1.0', 'end-1c')) > 20000:
-                        self.preview.delete('1.0', 'end-20001c')
-                    self.insert(prefix + value, live=True)
-                elif event == 'live_finished':
+                    self.note = 'Off · click the switch to listen'
+                elif event == 'model_error':
                     self.busy = False
-                    self.locked_target = None
-                    self.status.set('Live recording finished. Review the transcript.')
-                elif event == 'live_error':
-                    self.status.set(value)
-                elif event == 'audio_warning':
-                    self.status.set(value)
+                    self.note = value
                 elif event == 'text':
-                    self.preview.delete('1.0', 'end')
-                    self.preview.insert('1.0', value)
-                    if value:
-                        self.insert(value)
-                    else:
-                        self.busy = False
-                        self.status.set('No speech detected. Try again.')
-                elif event == 'limit' and self.stream:
-                    self.toggle(self.target)
-                elif event == 'audio_error' and self.stream:
-                    self.stop()
-                    if self.record_live:
-                        self.busy = True
-                        self.finish_phrases()
-                    self.chunks.clear()
-                    self.status.set(value)
-                elif event == 'error':
-                    self.busy = False
-                    self.status.set(value)
+                    self.deliver(*value)
+                elif event == 'warning':
+                    self.note = value
         except queue.Empty:
             pass
-        self.model_selector.configure(state='readonly' if self.model_ids and not self.busy and not self.stream else 'disabled')
-        self.live_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
-        self.continuous_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
-        self.auto_stop.configure(state='disabled' if self.busy or self.stream else 'readonly')
-        self.rolling_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
-        self.lock_checkbox.configure(state='disabled' if self.busy or self.stream else 'normal')
-        self.root.after(50, self.poll)
+        self.draw()
+        self.root.after(40, self.poll)
 
     def close(self):
         self.stop()
+        self.session += 1
+        self.pending.clear()
         self.root.destroy()
 
     def run(self):

@@ -34,3 +34,26 @@ class PhraseBuffer:
         self.speech = False
         self.silence_frames = 0
         return result
+
+
+class AudioRouter:
+    """Single-worker phrase routing; changing session/destination discards old audio."""
+    def __init__(self):
+        self.context = None
+        self.buffer = PhraseBuffer()
+
+    def feed(self, session, target, pcm):
+        if pcm is None:
+            if self.context and self.context[0] == session:
+                phrase = self.buffer.flush()
+                if phrase:
+                    return self.context[1], phrase
+            return None
+        if (session, target) != self.context:
+            self.context = (session, target)
+            self.buffer = PhraseBuffer()
+        if target is not None:
+            phrase = self.buffer.add(pcm)
+            if phrase:
+                return target, phrase
+        return None
