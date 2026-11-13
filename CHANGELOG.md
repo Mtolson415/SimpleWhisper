@@ -15,7 +15,6 @@
 - Microphone button controls listening; independent **On top** switch controls pinning.
 - Configurable shortcut with conflict preservation and suspension during Settings.
 - Illustrated project page, expandable guides, downloads and community policies.
-- Owner reports tested and working; detailed compatibility coverage remains limited.
 
 ## 0.5.1 — 2026-11-12
 

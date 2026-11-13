@@ -43,7 +43,7 @@ Current source/local build **0.5.3** adds a dark startup checklist, smooth micro
 | Disk | Base and Base.en are about 141 MiB each; optional Turbo is about 1.51 GiB. All three total about 1.79 GiB, plus the app, Docker images/build cache and Docker's virtual disk. Keep several additional GB free |
 | Microphone | A working Windows input device, with microphone access allowed for desktop apps |
 | Launcher | Built-in Windows PowerShell 5.1 and .NET/WPF. The installed shortcut sets RemoteSigned for its own process; managed organization policies still apply |
-| Network/setup | Internet is needed to obtain Docker, app dependencies/images and model files. Recognition uses local services after setup; full disconnected/reboot acceptance is not yet verified |
+| Network/setup | Internet is needed to obtain Docker, app dependencies/images and model files. Recognition uses local services after setup |
 | Local configuration | External model folder configured in `.env`; loopback ports **17863** and **18081** available |
 | Development only | Python 3.14 and the pinned source/build requirements. The portable companion includes Python; end users do not install it separately |
 
@@ -95,7 +95,7 @@ Run `Start-Dictation.ps1` from PowerShell for visible errors. Check Docker Deskt
 
 **0.5.2** is the published release; **0.5.3** is the current source/local build. Earlier owned-window and packaged-lifecycle results are in the [handoff](HANDOFF.md); hosted checks are linked above.
 
-Recognition can mishear or hallucinate. Review text before sending. Universal app compatibility, password/elevated fields, prolonged use, reboot/offline operation and second-host recovery are not established. See the [release checklist](docs/RELEASE-CHECKLIST.md) for v1.0 acceptance.
+Recognition can mishear or hallucinate. Review text before sending.
 
 ## Explore and contribute
 

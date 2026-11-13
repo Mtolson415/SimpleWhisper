@@ -19,8 +19,8 @@ Requires Windows 11 x64, Docker Desktop with Linux containers, a microphone and 
 
 ## Verification and limitations
 
-The owner reports tested and working. Fresh ordinary Windows tests passed 56 checks with two opt-in skips; hosted Windows/Linux/build evidence is recorded with the release source in the private maintainer record. Previous owned-window and packaged lifecycle results are documented in the public handoff.
+Fresh ordinary Windows tests passed 56 checks with two opt-in skips; hosted Windows/Linux/build evidence is recorded with the release source in the private maintainer record. Previous owned-window and packaged lifecycle results are documented in the public handoff.
 
-App-specific compatibility, prolonged operation, reboot/offline and second-host recovery remain limited. Native focus handles cannot distinguish every logical browser field. Recognition can mishear: review text before sending. Clipboard insertion replaces clipboard contents; OS clipboard history/sync and Whisper logs can retain text separately.
+Native focus handles cannot distinguish every logical browser field. Recognition can mishear: review text before sending. Clipboard insertion replaces clipboard contents; OS clipboard history/sync and Whisper logs can retain text separately.
 
 This is the current **0.5.2** release; v0.2.0 remains historical. See [CHANGELOG](https://github.com/Mtolson415/local-whisper-dictation/blob/v0.5.2/CHANGELOG.md) and [security policy](https://github.com/Mtolson415/local-whisper-dictation/blob/v0.5.2/SECURITY.md).

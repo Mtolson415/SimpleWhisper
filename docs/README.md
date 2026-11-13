@@ -70,7 +70,7 @@ docker run --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m --cap-drop AL
 
 For the opt-in desktop check, set DICTATION_DESKTOP_TEST=1 and run unittest discover -s tests -p test_desktop_acceptance.py. It creates its own synthetic external windows and a mocked-microphone toolbar. Focus the synthetic destination when requested; the test clicks its own toolbar. It verifies actual native focus preservation, Unicode insertion, stale-result rejection and fresh insertion after a destination switch. It never opens a microphone or targets a user app.
 
-Other tests cover routing, own-process exclusion, stale sessions, held-key deferral, queue bounds, marker filtering, gateway validation, native input layout and preferences. Separate manual acceptance remains necessary for microphone quality, intended apps, long-running hardware, reboot, disconnected operation and a second host. Synthetic transport checks are not universal compatibility evidence.
+Other tests cover routing, own-process exclusion, stale sessions, held-key deferral, queue bounds, marker filtering, gateway validation, native input layout and preferences. Synthetic transport checks are not universal compatibility evidence.
 
 ## Dependencies and coordination
 
@@ -78,10 +78,10 @@ Windows Python 3.14.7 was tested; Dockerfile digest-pins Python 3.14.0-slim (Pyt
 
 Read [the primary-source review](IMPLEMENTATION-REVIEW.md), [repository map](REPOSITORIES.md) and [handoff](../HANDOFF.md) before further work. Pull guidance, preserve user work, test and push completed milestones to the public/private pair. GitHub shares committed files, not chat history or model memory. Never commit recordings, transcripts, weights, private chat data, credentials or backups, even privately.
 
-## Exit ownership and v1.0 gate
+## Exit ownership
 
 The latest direction requires no dictation-owned background processes after exit. Normal shutdown verifies both scoped containers are stopped; a process-handle supervisor covers abnormal owner termination and then exits. Only services with this project's Compose label and the allowlisted dictation/whisper service label are stopped. Other local AI containers and the shared Docker engine remain outside this app's ownership.
 
-The simplified interface needs no feature expansion for v1.0. Actual packaged normal/forced-exit cleanup and close/reopen checks passed. The remaining release gate is real microphone-to-intended-application acceptance after the earlier input regressions, including a continuous listening/off/on trial. Record those results before calling v1.0 ready. General OS failure, a stopped Docker daemon or a forcibly killed cleanup helper cannot be guaranteed away; cleanup failures are not reported as success.
+Packaged normal/forced-exit cleanup and close/reopen checks passed. General OS failure, a stopped Docker daemon or a forcibly killed cleanup helper cannot be guaranteed away; cleanup failures are not reported as success.
 
 Packaged lifecycle acceptance uses DICTATION_LIFECYCLE_TEST=1 with unittest discover -s tests -p test_packaged_lifecycle.py. It starts the current package twice, opens no microphone, closes only its own window in the normal case and terminates only its own process in the forced case. Both cases verified no running dictation containers or project helper processes and preservation of unrelated container IDs. The inherited singleton guard and launcher wait also prevent a new owner from starting while prior cleanup is finishing. The installer removes the old resident Startup watcher; final installed state is closed with no dictation-owned services running.

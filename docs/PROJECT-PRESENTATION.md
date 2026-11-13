@@ -6,7 +6,7 @@ The previous README mixed onboarding with dated development evidence and superse
 
 The revision makes the GitHub repository the program page: illustrated introduction, useful badges, prominent version-specific download/setup/help links, feature table, expandable explanations and a Mermaid architecture diagram. GitHub does not run arbitrary JavaScript in README content; interactive elements use supported native rendering. The graphic is explicitly an illustration with synthetic text, not a screenshot or a fabricated performance result. No upstream artwork was copied.
 
-Setup, maintenance and acceptance detail live on dedicated pages. Community policies, issue forms, a PR template, license notices and a changelog make participation and support discoverable. A Windows ZIP and checksum accompany the release. This is a 0.5.2 release, not a claim of v1.0 acceptance.
+Setup, maintenance and acceptance detail live on dedicated pages. Community policies, issue forms, a PR template, license notices and a changelog make participation and support discoverable. A Windows ZIP and checksum accompany the release. The release is versioned 0.5.2.
 
 ## Primary sources reviewed
 

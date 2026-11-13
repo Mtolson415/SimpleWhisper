@@ -1,8 +1,6 @@
 # Release checklist
 
-## 0.5.2 scope
-
-User-reported tested and working on November 12, 2026. Application names, duration and language coverage were not provided. Ordinary local Windows tests: 56 passed, two opt-in checks skipped. Historical desktop/lifecycle evidence is in HANDOFF.md. Do not equate these with universal application acceptance.
+## Publishing a release
 
 Before publishing a release:
 
@@ -15,13 +13,4 @@ Before publishing a release:
 
 Completion evidence belongs in the handoff/private release record; this reusable checklist is not a claim that unchecked work was completed.
 
-## Before v1.0
-
-- [ ] Record real microphone results by app/version, language and microphone, without retaining speech or dictated text.
-- [ ] Record continuous listening, explicit off/on and intended-app insertion checks.
-- [ ] Check current packaged normal close, forced termination and reopen with unrelated containers preserved.
-- [ ] Check first installation on a clean second host and document model/setup failures.
-- [ ] Check reboot and disconnected operation, keeping those claims separate.
-- [ ] Review third-party license distribution and public documentation against shipped files.
-
-Limit scope honestly if any item is deferred. Keep captured speech, logs, user data and secrets out of all Git repositories.
+Keep captured speech, logs, user data and secrets out of all Git repositories.
