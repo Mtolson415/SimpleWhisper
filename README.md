@@ -6,12 +6,12 @@
 
 **Local voice dictation for Windows. A floating microphone switch that stays out of your way.**
 
-[![Tests](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml/badge.svg)](https://github.com/Mtolson415/local-whisper-dictation/actions/workflows/test.yml)
-[![Release](https://img.shields.io/github/v/release/Mtolson415/local-whisper-dictation)](https://github.com/Mtolson415/local-whisper-dictation/releases)
+[![Tests](https://github.com/Mtolson415/SimpleWhisper/actions/workflows/test.yml/badge.svg)](https://github.com/Mtolson415/SimpleWhisper/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/Mtolson415/local-whisper-dictation)](https://github.com/Mtolson415/SimpleWhisper/releases)
 [![MIT](https://img.shields.io/badge/license-MIT-60a5fa)](LICENSE)
 [![Windows 11 x64](https://img.shields.io/badge/platform-Windows_11_x64-7dd3fc)](docs/GETTING-STARTED.md)
 
-[**Download 0.5.2**](https://github.com/Mtolson415/local-whisper-dictation/releases/tag/v0.5.2) · [**Get started**](docs/GETTING-STARTED.md) · [**Get help**](https://github.com/Mtolson415/local-whisper-dictation/issues/new/choose) · [**Contribute**](CONTRIBUTING.md)
+[**Download 0.5.2**](https://github.com/Mtolson415/SimpleWhisper/releases/tag/v0.5.2) · [**Get started**](docs/GETTING-STARTED.md) · [**Get help**](https://github.com/Mtolson415/SimpleWhisper/issues/new/choose) · [**Contribute**](CONTRIBUTING.md)
 
 </div>
 
@@ -53,7 +53,7 @@ After one-time setup, **double-click SimpleWhisper**. A compact dark checklist a
 
 ## Get started
 
-1. [Download and extract the Windows ZIP](https://github.com/Mtolson415/local-whisper-dictation/releases/tag/v0.5.2).
+1. [Download and extract the Windows ZIP](https://github.com/Mtolson415/SimpleWhisper/releases/tag/v0.5.2).
 2. Follow [setup](docs/GETTING-STARTED.md) to obtain models and configure your private `.env`.
 3. Run `Start-Dictation.ps1` or use the installed desktop shortcut. It starts Docker Desktop and displays a checklist while services prepare; initial downloads can take longer.
 4. With listening off, choose your microphone/model in Settings. Click an external field and press **Ctrl+Alt+D**.
