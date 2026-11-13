@@ -72,7 +72,7 @@ Run `Start-Dictation.ps1` from PowerShell for visible errors. Check Docker Deskt
 
 ## Release status
 
-**0.5.2** is current. The owner reported on November 12, 2026 that they tested it and it works; applications, duration and language coverage were not specified. Automated Windows/Linux checks cover gateway, segmentation, preferences and input/lifecycle guards. Earlier owned-window and packaged-lifecycle results are in the [handoff](HANDOFF.md); hosted checks are linked above.
+**0.5.2** is current. Earlier owned-window and packaged-lifecycle results are in the [handoff](HANDOFF.md); hosted checks are linked above.
 
 Recognition can mishear or hallucinate. Review text before sending. Universal app compatibility, password/elevated fields, prolonged use, reboot/offline operation and second-host recovery are not established. See the [release checklist](docs/RELEASE-CHECKLIST.md) for v1.0 acceptance.
 
