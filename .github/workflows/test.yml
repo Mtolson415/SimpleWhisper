@@ -40,7 +40,7 @@ jobs:
           $archive = [IO.Compression.ZipFile]::OpenRead("$PWD/SimpleWhisper-Windows-x64.zip")
           try {
             $names = @($archive.Entries.FullName | ForEach-Object { $_.Replace('\', '/') })
-            foreach ($required in @('portable/SimpleWhisper/SimpleWhisper.exe', 'docs/assets/hero.svg', 'docs/GETTING-STARTED.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/PYTHON-LICENSE.txt', '.env.example', 'models.lock.json', 'Start-Dictation.ps1')) {
+            foreach ($required in @('portable/SimpleWhisper/SimpleWhisper.exe', 'portable/SimpleWhisper/_internal/ui_assets/mic-off.png', 'ui_assets/toggle-on.png', 'docs/assets/hero.svg', 'docs/GETTING-STARTED.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'licenses/PYTHON-LICENSE.txt', '.env.example', 'models.lock.json', 'Start-Dictation.ps1', 'Start-DictationWorker.ps1')) {
               if ($required -notin $names) { throw "Missing package file: $required" }
             }
             if ($names | Where-Object { $_ -match '(^|/)(\.env|settings\.json)$|\.(gguf|bin|wav|mp3|sqlite|db)$' }) { throw 'Unexpected private or model/audio payload' }

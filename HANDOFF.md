@@ -1,4 +1,15 @@
-# Current handoff - November 12, 2026
+# Current handoff - November 13, 2026
+
+## 0.5.3 — startup feedback and visual refinement
+
+User requested visible startup progress, matching dark styling for microphone/pin controls, README system requirements and removal of pause ellipses. Start-Dictation.ps1 now renders a compact WPF checklist immediately; Start-DictationWorker.ps1 performs bounded startup in a separate runspace, serializes launches with a mutex, waits individually for Docker/Whisper/gateway readiness and confirms a responding toolbar. Errors remain visible with selectable details after scoped cleanup. Existing-open detection avoids restarting services. Microphone never starts automatically.
+
+The installed Windows PowerShell shortcut was blocked by its default script policy during diagnosis. Installer now selects RemoteSigned only for the launcher process; permanent policies are unchanged. Group policies still apply. Refined native-code artwork is supersampled to committed PNGs by tools/Render-Controls.ps1 and bundled as ui_assets; Tk loads these with no new runtime dependencies. Original hit targets, independent pin behavior and focus routing remain intact. clean_transcript removes both ASCII and Unicode ellipses at gateway and desktop boundaries, preserving spaces and ordinary punctuation. Literal ellipses are consequently removed too.
+
+Source/local package is 0.5.3; published release link remains 0.5.2. Both repositories and visibility remain mapped in docs/REPOSITORIES.md. README separates Docker's documented 8 GB host minimum from suggested memory headroom, records model manifest sizes and lists configuration, microphone, disk and runtime needs.
+
+Validation: 66 ordinary Windows tests ran, 64 passed and two opt-in checks skipped. Five new worker checks cover successful ordering, Docker/model/app failure, scoped cleanup and existing-owner behavior. Three ellipsis checks cover joining, empty pauses and ordinary punctuation. Packaged 0.5.3 normal and forced-exit acceptance passed, leaving no owned services/helpers and preserving unrelated containers. All project PowerShell files parsed. Offscreen WPF rendering verified loading-screen layout; vector PNG review corrected the vertical microphone capsule before the final rebuild. Final installed launcher opened a responding SimpleWhisper toolbar after roughly 30 seconds and both containers were healthy. Installed state is open, listening off. No microphone was opened. Real microphone-to-intended-app acceptance, full cold-engine/reboot/offline behavior and second-host recovery remain separate. Hosted checks are verified separately after pushing.
+
 
 ## Professional 0.5.2 release presentation
 

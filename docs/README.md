@@ -1,4 +1,10 @@
-# Operating and learning guide - 0.5.2
+# Operating and learning guide - 0.5.3
+
+The desktop shortcut now opens a matching dark startup checklist immediately. It checks app/configuration, starts Docker Desktop, waits separately for Whisper and the gateway to be healthy, then waits for a responding toolbar. A slim indeterminate progress animation and elapsed time indicate ongoing work without inventing a percentage. Successful startup dismisses the checklist; failure keeps diagnostic text visible and cleans up touched speech services. Repeated launches are serialized; an already-open app does not restart its services. The shortcut uses process-scoped RemoteSigned, with no permanent execution-policy change.
+
+The microphone, On top switch and settings control use supersampled artwork with hover states. Microphone off/on uses muted rose/green; the independent pin switch uses slate/blue. Hit targets and focus routing are unchanged. Source PNG assets are included in portable builds and can be regenerated with `tools/Render-Controls.ps1`; no new runtime dependency is needed.
+
+Recognition-generated `...` and Unicode ellipses are removed before desktop insertion, replacing mid-phrase ellipses with a space so words do not run together. Ordinary periods, decimals and other punctuation are retained. Ellipses intended as literal punctuation are also removed; this cleanup does not infer speaker intent. See the README's system requirements before first-time setup.
 
 ## Current choices
 
@@ -29,7 +35,7 @@ Base supports English/Spanish and is the fast default. Base.en is English only. 
 
 ## Packaging, preferences and recovery
 
-Build-Portable.ps1 builds portable/v0.5.2 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher using the existing Tk feather resource from the bundled Tk DLL and removes this project's old resident Startup watcher. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
+Build-Portable.ps1 builds portable/v0.5.3 and a ZIP using a fresh versioned staging directory. UI Automation/comtypes and the retired lock/revision modules are no longer runtime dependencies. Model weights and .env remain external. Install-Shortcuts creates one desktop launcher using the existing Tk feather resource from the bundled Tk DLL and removes this project's old resident Startup watcher. It removes only the legacy Stop desktop link that targets this project's stop script. After moving the portable folder, update .env and rerun shortcut installation.
 
 Closing the app stops the microphone, cancels pending input and stops both project-owned speech containers (gateway and Whisper). The window reports Stopping dictation services until shutdown is verified. If cleanup cannot be confirmed, the visible app reports the error and allows closing again to retry rather than silently claiming success.
 
@@ -39,7 +45,7 @@ LocalAppData/LocalWhisperDictation/settings.json stores only microphone/model/ac
 
 ## Troubleshooting
 
-The desktop launcher prepares Docker and waits for both speech services before opening the window. A checked restart took about 30 seconds; allow startup to finish. If no window appears, run `Start-Dictation.ps1` from PowerShell in the project folder to see startup errors (the desktop shortcut hides that console). This application uses local Docker inference and has no Supabase dependency.
+The desktop launcher displays its checklist while Docker and both speech services prepare. A prior restart took about 30 seconds; cold Docker starts may take longer. If no checklist appears, reinstall the shortcut with `Install-Shortcuts.ps1` and check organization script policies. If a step fails, read the selectable details in the checklist. This application uses local Docker inference and has no Supabase dependency.
 
 | Symptom | Check |
 |---|---|

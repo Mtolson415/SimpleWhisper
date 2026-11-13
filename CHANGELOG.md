@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3 — source/local build
+
+- Added a dark, responsive startup checklist with real service readiness, visible failure details and automatic dismissal when the toolbar responds.
+- Desktop launcher can start Docker Desktop and containers; its script policy is scoped to the launcher process.
+- Refined microphone, independent On top toggle and settings artwork with smooth edges and hover feedback.
+- Removed pause ellipses from dictation without joining adjacent words.
+- Documented host, Docker, microphone, storage and source-development requirements.
+
 ## 0.5.2 — 2026-11-12
 
 - SimpleWhisper app, executable and shortcut name; feather icon retained.

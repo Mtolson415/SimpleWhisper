@@ -10,7 +10,7 @@ if (!$tkIconLibrary) { throw 'The companion Tk feather icon library is missing.'
 $featherIcon = $tkIconLibrary.FullName + ',0'
 $shortcut = $shortcutShell.CreateShortcut((Join-Path $desktopFolder 'SimpleWhisper.lnk'))
 $shortcut.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$shortcut.Arguments = '-NoProfile -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'Start-Dictation.ps1') + '"'
+$shortcut.Arguments = '-NoProfile -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File "' + (Join-Path $PSScriptRoot 'Start-Dictation.ps1') + '"'
 $shortcut.WorkingDirectory = $PSScriptRoot
 $shortcut.Description = 'Open local dictation. Exiting stops its microphone, speech services and helper.'
 $shortcut.IconLocation = $featherIcon

@@ -16,3 +16,16 @@ class QualityTests(unittest.TestCase):
 
     def test_whisper_control_tokens_are_removed(self):
         self.assertEqual(clean_transcript('<|en|>Hello<|1.23|><|endoftext|>'), 'Hello')
+
+    def test_pause_ellipses_join_words_without_running_them_together(self):
+        for text in ('Hello...world.', 'Hello ... world.', 'Hello\u2026world.'):
+            self.assertEqual(clean_transcript(text), 'Hello world.')
+        self.assertEqual(clean_transcript('...Hello world....'), 'Hello world')
+
+    def test_ellipsis_only_pause_is_empty(self):
+        for text in ('...', '\u2026', '......', ' ... \u2026 '):
+            self.assertEqual(clean_transcript(text), '')
+
+    def test_other_punctuation_and_decimals_are_preserved(self):
+        text = 'Version 0.5.3 costs 1.25. Really? Yes! Hola, mundo.'
+        self.assertEqual(clean_transcript(text), text)

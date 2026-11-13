@@ -13,6 +13,7 @@ from ctypes import wintypes
 import io
 import json
 import queue
+from pathlib import Path
 import subprocess
 import threading
 import time
@@ -32,7 +33,7 @@ from lifecycle import launch_supervisor, stop_services
 
 ENDPOINT = 'http://127.0.0.1:17863/transcribe'
 RATE = 16000
-VERSION = '0.5.2'
+VERSION = '0.5.3'
 
 
 def gateway_running():
@@ -78,7 +79,7 @@ class App:
         self.root = tk.Tk()
         self.root.withdraw()
         self.root.title('SimpleWhisper')
-        self.root.configure(bg='#171b23')
+        self.root.configure(bg='#181b20')
         self.root.geometry('310x96')
         self.root.resizable(False, False)
         self.root.attributes('-topmost', True)
@@ -111,10 +112,16 @@ class App:
         self.model = self.saved.get('model', 'base')
         self.models = []
         self.settings_window = None
-        self.canvas = tk.Canvas(self.root, width=310, height=96, bg='#171b23', highlightthickness=0,
+        self.canvas = tk.Canvas(self.root, width=310, height=96, bg='#181b20', highlightthickness=0,
                                 cursor='hand2', takefocus=False)
         self.canvas.pack()
         self.canvas.bind('<Button-1>', self.click)
+        asset_root = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'ui_assets'
+        self.control_images = {path.stem: tk.PhotoImage(file=str(path), master=self.root)
+                               for path in asset_root.glob('*.png')}
+        self.hover = None
+        self.canvas.bind('<Motion>', self.hover_control)
+        self.canvas.bind('<Leave>', lambda event: self.hover_control(None))
         self.menu = tk.Menu(self.root, tearoff=False, bg='#232936', fg='#eef2f8',
                             activebackground='#354052', activeforeground='white')
         self.menu.add_command(label='Settings…', command=self.open_settings)
@@ -133,28 +140,39 @@ class App:
         self.root.after(40, self.poll)
 
     def draw(self):
-        state = (self.listening, self.note, self.always_on_top, self.shortcut)
+        state = (self.listening, self.note, self.always_on_top, self.shortcut, self.hover)
         if getattr(self, '_drawn', None) == state:
             return
         self._drawn = state
         c = self.canvas
         c.delete('all')
-        color = '#20c779' if self.listening else '#e45461'
-        c.create_oval(13, 14, 59, 60, fill=color, outline='')
-        c.create_rectangle(32, 26, 40, 40, fill='#ffffff', outline='')
-        c.create_oval(32, 22, 40, 30, fill='#ffffff', outline='')
-        c.create_arc(26, 27, 46, 47, start=180, extent=180, style='arc', outline='#ffffff', width=2)
-        c.create_line(36, 47, 36, 52, fill='white', width=2)
-        c.create_line(30, 52, 42, 52, fill='white', width=2)
+        def image(kind, enabled, x, y):
+            key = kind + ('-on' if enabled else '-off')
+            if self.hover == kind:
+                key += '-hover'
+            c.create_image(x, y, anchor='nw', image=self.control_images[key])
+        image('mic', self.listening, 13, 14)
         c.create_text(72, 27, anchor='w', text='Listening' if self.listening else 'Off',
                       fill='#f2f5fa', font=('Segoe UI', 13, 'bold'))
         c.create_text(72, 49, anchor='w', text=self.shortcut, fill='#c5cfdd', font=('Segoe UI', 9))
-        c.create_oval(206, 24, 242, 48, fill='#20a779' if self.always_on_top else '#3b4352', outline='')
-        c.create_oval(218 if self.always_on_top else 208, 26,
-                      240 if self.always_on_top else 230, 46, fill='white', outline='')
-        c.create_text(224, 11, text='On top', fill='#c5cfdd', font=('Segoe UI', 8))
-        c.create_text(278, 36, text='⚙', fill='#c8d2df', font=('Segoe UI Symbol', 19))
+        image('toggle', self.always_on_top, 200, 23)
+        c.create_text(224, 11, text='On top', fill='#a9b8cc', font=('Segoe UI', 8))
+        image('gear', False, 261, 20)
+        c.create_line(13, 66, 297, 66, fill='#2b323d')
         c.create_text(13, 79, text=self.note[:49], anchor='w', fill='#a6b1c1', font=('Segoe UI', 9))
+
+    def hover_control(self, event):
+        target = None
+        if event is not None:
+            if event.x >= 259 and event.y < 65:
+                target = 'gear'
+            elif 198 <= event.x <= 250 and 20 <= event.y <= 57:
+                target = 'toggle'
+            elif 10 <= event.x <= 62 and 10 <= event.y <= 64:
+                target = 'mic'
+        if target != self.hover:
+            self.hover = target
+            self.draw()
 
     def click(self, event):
         if event.x >= 259 and event.y < 65:

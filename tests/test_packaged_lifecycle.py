@@ -20,7 +20,7 @@ class PackagedLifecycleTests(unittest.TestCase):
     def test_normal_and_forced_exit_leave_no_owned_services_or_helpers(self):
         from lifecycle import running_services, stop_services
         root = Path(__file__).resolve().parents[1]
-        executable = root / 'portable/v0.5.2/SimpleWhisper/SimpleWhisper.exe'
+        executable = root / 'portable/v0.5.3/SimpleWhisper/SimpleWhisper.exe'
         self.assertTrue(executable.is_file(), 'Build the current portable version first')
         powershell = Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
 

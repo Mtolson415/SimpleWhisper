@@ -17,7 +17,7 @@ Windows 11 x64, microphone, Docker Desktop with Linux containers, and storage fo
 2. Extract the whole ZIP to a writable folder. Keep scripts, Docker files, `docs` and `portable` together. The executable is unsigned; verify its origin.
 3. Obtain all three models in [models.lock.json](../models.lock.json) from the [pinned upstream revision](https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1). Store them together outside the app folder. Compare each SHA256 using `Get-FileHash`. The supplied Compose configuration expects all three files.
 4. Copy `.env.example` to `.env` in the extracted folder. Set `WHISPER_MODEL_DIR` to your absolute model directory, for example `C:/Models/dictation`. Keep `.env` private.
-5. Start Docker Desktop. Open PowerShell in the extracted folder and run `Start-Dictation.ps1`. It prepares the gateway and waits for services; initial image downloads take longer. Remove private paths/text before sharing errors.
+5. Complete Docker Desktop's first-run setup once. Open PowerShell in the extracted folder and run `Start-Dictation.ps1`. Current source starts Docker Desktop automatically and shows a dark readiness checklist; initial image downloads take longer. Remove private paths/text before sharing errors.
 6. Run `Install-Shortcuts.ps1` for a desktop shortcut with the existing feather icon. Rerun after moving the folder.
 
 ## First phrase
@@ -37,7 +37,7 @@ Clone this repository; install Python 3.14 x64. Configure `.env` and models as a
 .\Start-Dictation.ps1
 ```
 
-Output: `portable/v0.5.2/SimpleWhisper` and `SimpleWhisper-Windows-x64.zip`, excluding weights/private configuration. [Tests and contributions](../CONTRIBUTING.md).
+Output: `portable/v0.5.3/SimpleWhisper` and `SimpleWhisper-Windows-x64.zip`, excluding weights/private configuration. [System requirements](../README.md#system-requirements) · [Tests and contributions](../CONTRIBUTING.md).
 
 ## Update or remove
 

@@ -30,11 +30,32 @@ Click your text field, turn on the microphone, and speak. SimpleWhisper recogniz
 
 **Requires Windows 11 x64, Docker Desktop with Linux containers, and external model files.** The portable download includes the Windows runtime; models are separate. The executable is unsigned.
 
+Current source/local build **0.5.3** adds a dark startup checklist, smooth microphone and pin-switch artwork with hover feedback, and removal of recognition-generated ellipses during pauses. The download link above remains the published 0.5.2 release until a new release is published.
+
+## System requirements
+
+| Component | Requirement |
+| --- | --- |
+| Windows | Windows 11 x64, ordinary signed-in desktop session; use a Windows edition/build supported by your Docker Desktop installation |
+| Processor | 64-bit x86 processor with hardware virtualization enabled and SLAT support for the Docker/WSL backend; speech runs on the CPU |
+| Memory | Docker documents an 8 GB system RAM minimum. 16 GB or more is practical headroom for Windows, Docker and other apps; this is guidance, not a benchmarked SimpleWhisper minimum |
+| Docker | Docker Desktop configured for **Linux containers**, with a working WSL 2 backend (or supported Hyper-V setup), Compose v2 and the `docker desktop start` command available |
+| Disk | Base and Base.en are about 141 MiB each; optional Turbo is about 1.51 GiB. All three total about 1.79 GiB, plus the app, Docker images/build cache and Docker's virtual disk. Keep several additional GB free |
+| Microphone | A working Windows input device, with microphone access allowed for desktop apps |
+| Launcher | Built-in Windows PowerShell 5.1 and .NET/WPF. The installed shortcut sets RemoteSigned for its own process; managed organization policies still apply |
+| Network/setup | Internet is needed to obtain Docker, app dependencies/images and model files. Recognition uses local services after setup; full disconnected/reboot acceptance is not yet verified |
+| Local configuration | External model folder configured in `.env`; loopback ports **17863** and **18081** available |
+| Development only | Python 3.14 and the pinned source/build requirements. The portable companion includes Python; end users do not install it separately |
+
+Docker's host prerequisites are maintained in its [Windows installation requirements](https://docs.docker.com/desktop/setup/install/windows-install/). Model sizes come from this project's [model manifest](models.lock.json). No dedicated GPU or cloud speech API key is required by this CPU configuration.
+
+After one-time setup, **double-click SimpleWhisper**. A compact dark checklist appears while the launcher checks the app, starts Docker Desktop, waits for the speech model and dictation service, and opens the toolbar. You do not need to start Docker manually. Successful steps turn green; the active step is blue. The window closes after the toolbar responds. If startup fails, the failed step and selectable error details stay visible. The microphone always starts off.
+
 ## Get started
 
 1. [Download and extract the Windows ZIP](https://github.com/Mtolson415/local-whisper-dictation/releases/tag/v0.5.2).
 2. Follow [setup](docs/GETTING-STARTED.md) to obtain models and configure your private `.env`.
-3. Start Docker Desktop, then run `Start-Dictation.ps1`. Preparation took around 30 seconds on a previously checked system; initial downloads can take longer.
+3. Run `Start-Dictation.ps1` or use the installed desktop shortcut. It starts Docker Desktop and displays a checklist while services prepare; initial downloads can take longer.
 4. With listening off, choose your microphone/model in Settings. Click an external field and press **Ctrl+Alt+D**.
 5. Speak, pause and review the text. Switch listening off when finished.
 
@@ -72,7 +93,7 @@ Run `Start-Dictation.ps1` from PowerShell for visible errors. Check Docker Deskt
 
 ## Release status
 
-**0.5.2** is current. Earlier owned-window and packaged-lifecycle results are in the [handoff](HANDOFF.md); hosted checks are linked above.
+**0.5.2** is the published release; **0.5.3** is the current source/local build. Earlier owned-window and packaged-lifecycle results are in the [handoff](HANDOFF.md); hosted checks are linked above.
 
 Recognition can mishear or hallucinate. Review text before sending. Universal app compatibility, password/elevated fields, prolonged use, reboot/offline operation and second-host recovery are not established. See the [release checklist](docs/RELEASE-CHECKLIST.md) for v1.0 acceptance.
 
